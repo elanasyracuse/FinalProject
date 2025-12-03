@@ -1,5 +1,5 @@
 """
-RAG Research Bot - Simplified Streamlit UI
+RAG Research Bot - Streamlit UI with Agent, Memory, Reranking & Knowledge Graph
 Author: Amaan
 """
 
@@ -8,10 +8,9 @@ import pandas as pd
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-from orchestrator import PipelineOrchestrator
-from email_utils import send_papers_email
+import streamlit.components.v1 as components
 
-# Page configuration
+# Page configuration - MUST BE FIRST
 st.set_page_config(
     page_title="RAG Research Bot",
     page_icon="🤖",
@@ -19,307 +18,312 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Simplified Custom CSS
+# Now import other modules (after set_page_config)
+from database_manager import DatabaseManager
+from vector_store import VectorStore
+from memory import ConversationMemory, LongTermMemory
+from reranker import LLMReranker
+from agent import ResearchAgent
+from email_utils import send_papers_email
+from graph_module import create_graph_for_streamlit, get_graph_stats
+
+# Custom CSS
 st.markdown("""
 <style>
-    /* Import Google Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    /* Global Styles */
-    * {
-        font-family: 'Inter', sans-serif;
-    }
+    * { font-family: 'Inter', sans-serif; }
+    .main { padding: 2rem; background-color: #f8fafc; }
+    h1, h2, h3 { color: #1e3a8a; font-weight: 600; }
     
-    .main {
-        padding: 2rem;
-        background-color: #f8fafc;
-    }
-    
-    /* Header Styling */
-    h1, h2, h3 {
-        color: #1e3a8a;
-        font-weight: 600;
-    }
-    
-    /* Landing Page Hero */
     .hero-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 2rem 1rem 1.5rem 1rem;
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; text-align: center; padding: 2rem 1rem;
     }
+    .hero-title { font-size: 2.5rem; font-weight: 600; color: #1e3a8a; margin-bottom: 0.5rem; }
+    .hero-subtitle { font-size: 1rem; color: #0369a1; max-width: 700px; line-height: 1.6; }
     
-    .hero-title {
-        font-size: 3rem;
-        font-weight: 600;
-        color: #1e3a8a;
-        margin-bottom: 0.75rem;
-        letter-spacing: -0.02em;
-    }
+    .chat-message { padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
+    .user-message { background-color: #dbeafe; }
+    .bot-message { background-color: #f1f5f9; }
     
-    .hero-subtitle {
-        font-size: 1.125rem;
-        color: #0369a1;
-        max-width: 700px;
-        line-height: 1.6;
-        margin-bottom: 2rem;
-    }
-    
-    /* Search Box Styling */
     .stTextInput>div>div>input {
-        background-color: #ffffff;
-        border: 2px solid #cbd5e1;
-        border-radius: 12px;
-        padding: 1rem 1.5rem;
-        color: #1e293b;
-        font-size: 1rem;
-        transition: all 0.3s ease;
+        background-color: #ffffff; border: 2px solid #cbd5e1;
+        border-radius: 12px; padding: 1rem; font-size: 1rem;
     }
+    .stTextInput>div>div>input:focus { border-color: #3b82f6; }
     
-    .stTextInput>div>div>input:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        background-color: #ffffff;
-    }
-    
-    .stTextInput>div>div>input::placeholder {
-        color: #64748b;
-    }
-    
-    /* Card Styles */
     .result-card {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
+        background-color: #ffffff; border: 1px solid #e2e8f0;
+        border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;
     }
+    .result-card:hover { border-color: #3b82f6; transform: translateY(-2px); }
     
-    .result-card:hover {
-        border-color: #3b82f6;
-        transform: translateY(-2px);
-    }
+    [data-testid="stSidebar"] { background-color: #1e3a8a; }
+    [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
     
-    /* Expander Styling */
-    .streamlit-expanderHeader {
-        background-color: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 12px !important;
-        color: #1e3a8a !important;
-        padding: 1rem !important;
-        font-weight: 500 !important;
-    }
-    
-    .streamlit-expanderHeader:hover {
-        border-color: #3b82f6 !important;
-        background-color: #f1f5f9 !important;
-    }
-    
-    .streamlit-expanderContent {
-        background-color: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        border-top: none !important;
-        border-radius: 0 0 12px 12px !important;
-        padding: 1.5rem !important;
-    }
-    
-    /* Buttons */
     .stButton>button {
-        background-color: #3b82f6;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.75rem 1.5rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
+        background-color: #3b82f6; color: white; border: none;
+        border-radius: 8px; padding: 0.75rem 1.5rem; font-weight: 500;
     }
+    .stButton>button:hover { background-color: #2563eb; }
     
-    .stButton>button:hover {
-        background-color: #2563eb;
-        transform: translateY(-1px);
-    }
-    
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background-color: #1e3a8a;
-        border-right: 1px solid #1e40af;
-    }
-    
-    [data-testid="stSidebar"] * {
-        color: #f1f5f9 !important;
-    }
-    
-    /* Metric Cards */
-    .metric-card {
-        background-color: #ffffff;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid #e2e8f0;
-        text-align: center;
-    }
-    
-    /* Number inputs */
-    .stNumberInput>div>div>input {
-        background-color: #ffffff;
-        border: 2px solid #cbd5e1;
-        border-radius: 8px;
-        color: #1e293b;
-    }
-    
-    /* Selectbox */
-    .stSelectbox>div>div {
-        background-color: #ffffff;
-        border: 2px solid #cbd5e1;
-        border-radius: 8px;
-        color: #1e293b;
-    }
-    
-    /* Success/Info/Warning boxes */
-    .stSuccess {
-        background-color: #dcfce7;
-        color: #166534;
-        border: 1px solid #86efac;
-    }
-    
-    .stInfo {
-        background-color: #dbeafe;
-        color: #1e40af;
-        border: 1px solid #93c5fd;
-    }
-    
-    .stWarning {
-        background-color: #fef3c7;
-        color: #92400e;
-        border: 1px solid #fde68a;
-    }
-    
-    .stError {
-        background-color: #fee2e2;
-        color: #991b1b;
-        border: 1px solid #fca5a5;
-    }
-    
-    /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    /* Badge */
-    .badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 6px;
-        font-size: 0.875rem;
-        font-weight: 500;
-        margin: 0.25rem;
-        background-color: #dbeafe;
-        color: #1e40af;
-    }
-    
-    /* Links */
-    a {
-        color: #3b82f6;
-        text-decoration: none;
-        font-weight: 500;
-    }
-    
-    a:hover {
-        color: #2563eb;
-        text-decoration: underline;
-    }
-    
-    /* Checkbox */
-    .stCheckbox {
-        color: #1e293b;
-    }
-    
-    /* Text color */
-    p, label, span, div {
-        color: #334155;
-    }
-    
-    /* Strong emphasis */
-    strong {
-        color: #1e293b;
-        font-weight: 600;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize orchestrator
+
+# ============ Initialize Components ============
+
 @st.cache_resource
-def init_orchestrator():
-    return PipelineOrchestrator()
+def init_components():
+    """Initialize all components once"""
+    db = DatabaseManager()
+    reranker = LLMReranker()
+    vector_store = VectorStore(reranker=reranker)
+    return db, vector_store, reranker
 
-orchestrator = init_orchestrator()
+db, vector_store, reranker = init_components()
 
-# Sidebar
+# Session-based components (not cached)
+if 'conv_memory' not in st.session_state:
+    st.session_state.conv_memory = ConversationMemory()
+
+if 'lt_memory' not in st.session_state:
+    st.session_state.lt_memory = LongTermMemory(db)
+
+if 'agent' not in st.session_state:
+    st.session_state.agent = ResearchAgent(
+        vector_store=vector_store,
+        db_manager=db,
+        conversation_memory=st.session_state.conv_memory,
+        long_term_memory=st.session_state.lt_memory,
+        reranker=reranker
+    )
+
+if 'user_email' not in st.session_state:
+    st.session_state.user_email = None
+
+if 'user_logged_in' not in st.session_state:
+    st.session_state.user_logged_in = False
+
+
+# ============ Sidebar ============
+
 with st.sidebar:
-    st.markdown("<h2 style='text-align: center; margin-bottom: 2rem;'>🤖 RAG Bot</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>🤖 RAG Bot</h2>", unsafe_allow_html=True)
     
-    page = st.selectbox(
-        "Navigation",
-        ["🔍 Search Papers", "📊 Dashboard", "⚙️ Pipeline Control", "📚 Browse Papers"]
+    # User login section
+    st.markdown("### 👤 User Profile")
+    
+    user_email = st.text_input(
+        "Your Email",
+        value=st.session_state.user_email or "",
+        placeholder="you@example.com"
     )
     
-    st.markdown("<hr style='margin: 2rem 0; border-color: #334155;'>", unsafe_allow_html=True)
+    if user_email and user_email != st.session_state.user_email:
+        st.session_state.user_email = user_email
+        st.session_state.agent.set_user(user_email)
+        st.session_state.user_logged_in = True
+        st.success(f"Welcome!")
     
-    st.markdown("### Quick Stats")
-    stats = orchestrator.get_status()
+    if st.session_state.user_logged_in:
+        st.markdown(f"✅ Logged in as: {st.session_state.user_email}")
+        
+        # Show saved papers count
+        saved = st.session_state.lt_memory.get_saved_papers(
+            st.session_state.agent.current_user_id
+        )
+        st.markdown(f"📚 Saved papers: {len(saved)}")
+    
+    st.markdown("<hr>", unsafe_allow_html=True)
+    
+    # Navigation
+    page = st.selectbox(
+        "Navigation",
+        ["💬 Chat", "🔍 Search", "🕸️ Knowledge Graph", "📊 Dashboard", "⚙️ Pipeline", "📚 My Papers"]
+    )
+    
+    st.markdown("<hr>", unsafe_allow_html=True)
+    
+    # Quick Stats
+    st.markdown("### 📈 Stats")
+    stats = db.get_stats()
     
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Papers", stats['total_papers'])
         st.metric("Embedded", stats['papers_with_embeddings'])
     with col2:
-        st.metric("Processed", stats['processed_papers'])
-        if stats.get('estimated_cost_usd'):
-            st.metric("Cost", f"${stats['estimated_cost_usd']:.4f}")
+        st.metric("Users", stats['total_users'])
+        st.metric("Searches", stats['total_searches'])
+    
+    # Email settings (collapsed)
+    with st.expander("📧 Email Settings"):
+        smtp_user = st.text_input("SMTP Email", placeholder="your@gmail.com")
+        smtp_pass = st.text_input("App Password", type="password")
+        
+        if smtp_user and smtp_pass:
+            st.session_state.agent.set_email_credentials(smtp_user, smtp_pass)
+            st.success("Email configured!")
 
-# Main content based on selected page
-if page == "🔍 Search Papers":
-    # Hero section - simple and clean like the reference image
+
+# ============ Main Content ============
+
+if page == "💬 Chat":
     st.markdown("""
         <div class='hero-container'>
-            <h1 class='hero-title'>Research Paper Library</h1>
-            <p class='hero-subtitle'>Explore our collection of RAG and LLM research papers using semantic search. Find the most relevant papers for your research needs.</p>
+            <h1 class='hero-title'>Research Paper Assistant</h1>
+            <p class='hero-subtitle'>Chat with an AI agent to find, understand, and organize research papers. 
+            Try: "Find papers on RAG" or "Summarize the first paper"</p>
         </div>
     """, unsafe_allow_html=True)
     
-    # Centered search interface
+    # Chat interface
+    st.markdown("### 💬 Conversation")
+    
+    # Display conversation history
+    for msg in st.session_state.conv_memory.messages:
+        if msg['role'] == 'user':
+            st.markdown(f"<div class='chat-message user-message'><b>You:</b> {msg['content']}</div>", 
+                       unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='chat-message bot-message'><b>Assistant:</b> {msg['content']}</div>", 
+                       unsafe_allow_html=True)
+    
+    # Chat input
+    user_input = st.chat_input("Ask about papers... (e.g., 'Find papers on hallucination in LLMs')")
+    
+    if user_input:
+        # Display user message
+        st.markdown(f"<div class='chat-message user-message'><b>You:</b> {user_input}</div>", 
+                   unsafe_allow_html=True)
+        
+        # Get agent response
+        with st.spinner("Thinking..."):
+            response = st.session_state.agent.chat(user_input)
+        
+        # Display response
+        st.markdown(f"<div class='chat-message bot-message'><b>Assistant:</b> {response}</div>", 
+                   unsafe_allow_html=True)
+        
+        # Rerun to update history display
+        st.rerun()
+    
+    # Display current search results if any
+    if st.session_state.conv_memory.current_search_results:
+        st.markdown("---")
+        st.markdown("### 📄 Current Search Results")
+        
+        for i, paper in enumerate(st.session_state.conv_memory.current_search_results, 1):
+            with st.expander(f"#{i} - {paper.get('title', 'Untitled')[:80]}..."):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.markdown(f"**ArXiv ID:** {paper.get('arxiv_id')}")
+                    
+                    # Show both similarity and rerank score if available
+                    sim = paper.get('similarity', 0)
+                    rerank = paper.get('rerank_score', sim)
+                    st.markdown(f"**Embedding Similarity:** {sim:.2%}")
+                    if rerank != sim:
+                        st.markdown(f"**Rerank Score:** {rerank:.2%}")
+                    
+                    st.markdown("**Abstract:**")
+                    st.markdown(paper.get('abstract', 'No abstract')[:500] + "...")
+                
+                with col2:
+                    st.markdown(f"[📄 ArXiv](https://arxiv.org/abs/{paper.get('arxiv_id')})")
+                    
+                    # Quick action buttons
+                    if st.session_state.user_logged_in:
+                        if st.button(f"💾 Save", key=f"save_{i}"):
+                            st.session_state.lt_memory.save_paper(
+                                st.session_state.agent.current_user_id,
+                                paper.get('arxiv_id')
+                            )
+                            st.success("Saved!")
+    
+    # Clear conversation button
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.session_state.conv_memory.current_search_results:
+            if st.button("🕸️ View Knowledge Graph"):
+                st.session_state.show_graph = True
+                st.info("Go to **🕸️ Knowledge Graph** page in the sidebar to see the visualization!")
+    with col2:
+        if st.button("🗑️ Clear Conversation"):
+            st.session_state.conv_memory.clear()
+            st.rerun()
+
+
+elif page == "🔍 Search":
+    st.markdown("""
+        <div class='hero-container'>
+            <h1 class='hero-title'>Search Papers</h1>
+            <p class='hero-subtitle'>Semantic search with RAG and LLM reranking</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Search interface
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
         query = st.text_input(
             "Search",
-            placeholder="Search papers by topic, methodology, or keywords...",
-            label_visibility="collapsed",
-            key="search_input"
+            placeholder="Enter your search query...",
+            label_visibility="collapsed"
         )
         
-        col_a, col_b = st.columns([3, 1])
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            n_results = st.number_input("Results", 1, 20, 5)
         with col_b:
-            n_results = st.number_input("Results", min_value=1, max_value=20, value=5, label_visibility="collapsed")
+            use_reranker = st.checkbox("Use LLM Reranking", value=True)
+        with col_c:
+            search_btn = st.button("🔍 Search", type="primary")
     
-    if query:
-        with st.spinner("Searching through papers..."):
-            results = orchestrator.search_papers(query, n_results)
+    if query and search_btn:
+        with st.spinner("Searching and reranking..."):
+            # Get user interests for personalized reranking
+            user_interests = []
+            if st.session_state.user_logged_in:
+                user_interests = st.session_state.lt_memory.get_user_interests(
+                    st.session_state.agent.current_user_id
+                )
             
-        if results['results']:
-            st.session_state.last_search_results = results['results']
-            st.session_state.last_query = query
+            # Search with reranking
+            results = vector_store.semantic_search(
+                query, 
+                n_results=n_results,
+                use_reranker=use_reranker,
+                user_interests=user_interests
+            )
             
-            st.success(f"Found {len(results['results'])} relevant papers")
+            # Save to conversation memory
+            st.session_state.conv_memory.set_search_results(results, query)
             
-            # Display results
-            for i, paper in enumerate(results['results'], 1):
+            # Log search to long-term memory
+            if st.session_state.user_logged_in:
+                st.session_state.lt_memory.add_search(
+                    st.session_state.agent.current_user_id,
+                    query,
+                    len(results)
+                )
+        
+        if results:
+            st.success(f"Found {len(results)} papers" + (" (reranked)" if use_reranker else ""))
+            
+            for i, paper in enumerate(results, 1):
                 with st.expander(f"#{i} - {paper['title']}", expanded=(i == 1)):
                     col1, col2 = st.columns([3, 1])
                     
                     with col1:
                         st.markdown(f"**ArXiv ID:** {paper['arxiv_id']}")
-                        st.markdown(f"**Similarity:** {paper['similarity']:.2%}")
+                        st.markdown(f"**Embedding Similarity:** {paper['similarity']:.2%}")
+                        if paper.get('rerank_score'):
+                            st.markdown(f"**Rerank Score:** {paper['rerank_score']:.2%}")
                         
                         st.markdown("**Abstract:**")
                         st.markdown(paper['abstract'])
@@ -329,47 +333,126 @@ if page == "🔍 Search Papers":
                             st.info(paper['relevant_chunk'])
                     
                     with col2:
-                        st.markdown(f"[📄 View on ArXiv](https://arxiv.org/abs/{paper['arxiv_id']})")
-            
-            # Email section
-            st.markdown("---")
-            st.markdown("### 📧 Email These Papers")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                user_email = st.text_input("Recipient email", placeholder="you@example.com")
-                smtp_user = st.text_input("SMTP sender email", placeholder="yourgmail@gmail.com")
-            
-            with col2:
-                smtp_password = st.text_input("SMTP app password", type="password")
-                
-                can_send = bool(st.session_state.get('last_search_results', [])) and bool(user_email) and bool(smtp_user) and bool(smtp_password)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("Send Email", disabled=not can_send):
-                    try:
-                        send_papers_email(
-                            smtp_user=smtp_user,
-                            smtp_password=smtp_password,
-                            to_address=user_email,
-                            query=st.session_state.get('last_query', query),
-                            papers=st.session_state.get('last_search_results', []),
-                        )
-                        st.success(f"Email sent successfully to {user_email}!")
-                    except Exception as e:
-                        st.error(f"Failed to send email: {e}")
+                        st.markdown(f"[📄 ArXiv](https://arxiv.org/abs/{paper['arxiv_id']})")
+                        
+                        if st.session_state.user_logged_in:
+                            if st.button(f"💾 Save", key=f"search_save_{i}"):
+                                st.session_state.lt_memory.save_paper(
+                                    st.session_state.agent.current_user_id,
+                                    paper['arxiv_id']
+                                )
+                                st.success("Saved!")
         else:
-            st.warning("No relevant papers found. Try different keywords.")
+            st.warning("No papers found.")
+
+
+elif page == "🕸️ Knowledge Graph":
+    st.markdown("<h1 style='text-align: center;'>🕸️ Knowledge Graph</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #64748b;'>Visualize relationships between papers and concepts</p>", unsafe_allow_html=True)
+    
+    # Check if we have search results
+    if not st.session_state.conv_memory.current_search_results:
+        st.info("👆 First, search for papers in the **Chat** or **Search** page to generate a knowledge graph.")
+        
+        # Option to search directly
+        st.markdown("### Quick Search")
+        quick_query = st.text_input("Enter a topic to search:", placeholder="e.g., retrieval augmented generation")
+        
+        if st.button("🔍 Search & Generate Graph", type="primary"):
+            if quick_query:
+                with st.spinner("Searching papers..."):
+                    results = vector_store.semantic_search(quick_query, n_results=5)
+                    st.session_state.conv_memory.set_search_results(results, quick_query)
+                    st.rerun()
+    else:
+        papers = st.session_state.conv_memory.current_search_results
+        topic = st.session_state.conv_memory.current_topic
+        
+        st.success(f"📊 Showing graph for **{len(papers)} papers** on topic: **{topic}**")
+        
+        # Graph options
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.markdown(f"**Papers in graph:** {len(papers)}")
+        with col2:
+            show_shared = st.checkbox("Highlight shared concepts", value=True)
+        with col3:
+            if st.button("🔄 Refresh Graph"):
+                st.rerun()
+        
+        # Display graph statistics
+        stats = get_graph_stats(papers)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Papers", stats["total_papers"])
+        with col2:
+            st.metric("Concepts", stats["total_concepts"])
+        with col3:
+            st.metric("Shared", stats["shared_concepts"])
+        with col4:
+            st.metric("Unique", stats["unique_concepts"])
+        
+        # Generate and display the graph
+        st.markdown("### 📈 Interactive Knowledge Graph")
+        st.markdown("*🔵 Blue = Papers | 🟠 Orange = Shared Concepts | 🟢 Green = Unique Concepts*")
+        
+        with st.spinner("Generating knowledge graph..."):
+            graph_html = create_graph_for_streamlit(papers, graph_type="simple")
+        
+        # Display the graph in an iframe
+        components.html(graph_html, height=650, scrolling=True)
+        
+        # Show shared concepts
+        if stats["shared_list"]:
+            st.markdown("### 🔗 Shared Concepts Across Papers")
+            
+            shared_concepts = stats["shared_list"]
+            concept_details = stats["concept_details"]
+            
+            for concept in shared_concepts:
+                papers_with_concept = concept_details.get(concept, [])
+                with st.expander(f"**{concept}** (in {len(papers_with_concept)} papers)"):
+                    for p in papers_with_concept:
+                        st.markdown(f"- {p[:80]}...")
+        
+        # Show papers with their concepts
+        st.markdown("### 📄 Papers & Their Concepts")
+        
+        for i, paper in enumerate(papers, 1):
+            title = paper.get('title', f'Paper {i}')
+            abstract = paper.get('abstract', '')
+            from graph_module import extract_simple_concepts
+            concepts = extract_simple_concepts(title + " " + abstract)
+            
+            with st.expander(f"#{i} - {title[:60]}..."):
+                st.markdown(f"**ArXiv ID:** {paper.get('arxiv_id', 'N/A')}")
+                st.markdown(f"**Concepts ({len(concepts)}):** {', '.join(concepts[:15])}")
+                
+                if st.session_state.user_logged_in:
+                    if st.button(f"💾 Save Paper", key=f"graph_save_{i}"):
+                        st.session_state.lt_memory.save_paper(
+                            st.session_state.agent.current_user_id,
+                            paper.get('arxiv_id')
+                        )
+                        st.success("Saved!")
+        
+        # Download graph option
+        st.markdown("---")
+        st.download_button(
+            label="📥 Download Graph HTML",
+            data=graph_html,
+            file_name="knowledge_graph.html",
+            mime="text/html"
+        )
+
 
 elif page == "📊 Dashboard":
     st.markdown("<h1 style='text-align: center;'>Pipeline Dashboard</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #94a3b8;'>Monitor your research pipeline</p>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
     
-    stats = orchestrator.get_status()
+    stats = db.get_stats()
+    
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.metric("Total Papers", stats['total_papers'])
     with col2:
@@ -379,158 +462,162 @@ elif page == "📊 Dashboard":
     with col4:
         st.metric("Total Chunks", stats['total_chunks'])
     
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    
-    if stats.get('last_run'):
-        st.markdown("### Last Pipeline Run")
-        col1, col2, col3 = st.columns(3)
-        
-        last_run = stats['last_run']
-        
-        with col1:
-            st.markdown(f"**Start Time:** {last_run['start_time']}")
-        with col2:
-            st.markdown(f"**Status:** {last_run['status']}")
-        with col3:
-            st.markdown(f"**Papers Processed:** {last_run['papers_processed']}")
-    
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    pipeline_data = {
-        'Stage': ['Fetched', 'Downloaded', 'Parsed', 'Embedded'],
-        'Count': [
-            stats['total_papers'],
-            stats.get('processed_papers', 0),
-            stats.get('processed_papers', 0),
-            stats.get('papers_with_embeddings', 0)
-        ]
-    }
     
     col1, col2 = st.columns(2)
     
     with col1:
+        pipeline_data = {
+            'Stage': ['Fetched', 'Processed', 'Embedded'],
+            'Count': [
+                stats['total_papers'],
+                stats['processed_papers'],
+                stats['papers_with_embeddings']
+            ]
+        }
         fig = px.funnel(pipeline_data, y='Stage', x='Count', title="Pipeline Funnel")
-        fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff', font={'color': '#1e293b'})
+        fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        processing_status = {
-            'Status': ['Fully Processed', 'Partially Processed', 'Not Processed'],
-            'Count': [
-                stats.get('papers_with_embeddings', 0),
-                stats.get('processed_papers', 0) - stats.get('papers_with_embeddings', 0),
-                stats['total_papers'] - stats.get('processed_papers', 0)
-            ]
+        user_data = {
+            'Metric': ['Users', 'Searches', 'Saved Papers'],
+            'Count': [stats['total_users'], stats['total_searches'], stats['total_saved_papers']]
         }
-        fig = px.pie(processing_status, values='Count', names='Status', title="Processing Status")
-        fig.update_layout(paper_bgcolor='#ffffff', font={'color': '#1e293b'})
+        fig = px.bar(user_data, x='Metric', y='Count', title="User Activity")
+        fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
-elif page == "⚙️ Pipeline Control":
+
+elif page == "⚙️ Pipeline":
     st.markdown("<h1 style='text-align: center;'>Pipeline Control</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #94a3b8;'>Manage and execute pipeline operations</p>", unsafe_allow_html=True)
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # Import orchestrator here to avoid circular imports
+    from orchestrator import PipelineOrchestrator
+    
+    @st.cache_resource
+    def get_orchestrator():
+        return PipelineOrchestrator()
+    
+    orchestrator = get_orchestrator()
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("### Run Complete Pipeline")
-        days_back = st.number_input("Days to look back", min_value=1, max_value=365, value=7)
-        max_papers = st.number_input("Max papers to fetch", min_value=1, max_value=200, value=50)
+        st.markdown("### Run Pipeline")
+        days = st.number_input("Days back", 1, 365, 7)
+        max_papers = st.number_input("Max papers", 1, 200, 50)
         
         if st.button("🚀 Run Complete Pipeline", type="primary"):
             with st.spinner("Running pipeline..."):
                 results = orchestrator.run_complete_pipeline()
                 
                 if results['status'] == 'SUCCESS':
-                    st.success("Pipeline completed successfully!")
-                    
-                    fetch = results['steps'].get('fetch', {})
-                    parse = results['steps'].get('parse', {})
-                    embed = results['steps'].get('embeddings', {})
-                    
-                    st.markdown(f"""
-                    **Results:**
-                    - Papers fetched: {fetch.get('papers_stored', 0)}
-                    - Papers parsed: {parse.get('success', 0)}
-                    - Embeddings created: {embed.get('success', 0)}
-                    - API cost: ${embed.get('estimated_cost', 0):.4f}
-                    """)
+                    st.success("Pipeline completed!")
+                    st.json(results['steps'])
                 else:
-                    st.error(f"Pipeline failed: {results.get('error', 'Unknown error')}")
+                    st.error(f"Failed: {results.get('error')}")
     
     with col2:
         st.markdown("### Individual Steps")
         
-        if st.button("📥 Fetch Papers Only"):
-            with st.spinner("Fetching papers..."):
-                fetch_results = orchestrator.arxiv_bot.fetch_recent_papers(days_back, max_papers)
-                st.success(f"Fetched {fetch_results['papers_stored']} papers")
+        if st.button("📥 Fetch Papers"):
+            with st.spinner("Fetching..."):
+                r = orchestrator.arxiv_bot.fetch_recent_papers(days, max_papers)
+                st.success(f"Fetched {r['papers_stored']} papers")
         
-        if st.button("📄 Parse PDFs Only"):
-            with st.spinner("Parsing PDFs..."):
-                parse_results = orchestrator.pdf_parser.parse_all_unprocessed()
-                st.success(f"Parsed {parse_results['success']} papers")
+        if st.button("📄 Parse PDFs"):
+            with st.spinner("Parsing..."):
+                r = orchestrator.pdf_parser.parse_all_unprocessed()
+                st.success(f"Parsed {r['success']} papers")
         
-        if st.button("🔮 Create Embeddings Only"):
+        if st.button("🔮 Create Embeddings"):
             with st.spinner("Creating embeddings..."):
-                embed_results = orchestrator.vector_store.process_all_papers()
-                st.success(f"Created embeddings for {embed_results['success']} papers")
-                st.info(f"API cost: ${embed_results['estimated_cost']:.4f}")
+                r = orchestrator.vector_store.process_all_papers()
+                st.success(f"Embedded {r['success']} papers (${r['estimated_cost']:.4f})")
 
-elif page == "📚 Browse Papers":
-    st.markdown("<h1 style='text-align: center;'>Browse Papers</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #94a3b8;'>Explore your research paper collection</p>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+
+elif page == "📚 My Papers":
+    st.markdown("<h1 style='text-align: center;'>My Papers</h1>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        filter_processed = st.checkbox("Only processed papers", value=False)
-    with col2:
-        filter_embedded = st.checkbox("Only with embeddings", value=False)
-    with col3:
-        sort_order = st.selectbox("Sort by", ["Recent", "Title"])
-    
-    papers = orchestrator.get_recent_papers(50)
-    filtered_papers = papers
-    if filter_processed:
-        filtered_papers = [p for p in filtered_papers if p['processed']]
-    if filter_embedded:
-        filtered_papers = [p for p in filtered_papers if p['has_embeddings']]
-    
-    if sort_order == "Title":
-        filtered_papers.sort(key=lambda x: x['title'])
-    
-    st.markdown(f"**Showing {len(filtered_papers)} of {len(papers)} papers**")
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    for paper in filtered_papers:
-        with st.expander(f"{paper['title'][:100]}..."):
-            col1, col2 = st.columns([3, 1])
+    if not st.session_state.user_logged_in:
+        st.warning("Please enter your email in the sidebar to view your saved papers.")
+    else:
+        user_id = st.session_state.agent.current_user_id
+        
+        # Tabs for different views
+        tab1, tab2, tab3 = st.tabs(["💾 Saved Papers", "🔍 Search History", "📊 My Stats"])
+        
+        with tab1:
+            saved_papers = st.session_state.lt_memory.get_saved_papers(user_id)
             
+            if saved_papers:
+                st.markdown(f"**{len(saved_papers)} saved papers**")
+                
+                for paper in saved_papers:
+                    with st.expander(f"{paper['title'][:80]}..."):
+                        st.markdown(f"**ArXiv ID:** {paper['arxiv_id']}")
+                        st.markdown(f"**Saved:** {paper['saved_at']}")
+                        st.markdown(f"**Abstract:** {paper['abstract']}")
+                        
+                        if paper.get('notes'):
+                            st.info(f"**Your notes:** {paper['notes']}")
+                        
+                        # Add note
+                        note = st.text_area(
+                            "Add/Update note", 
+                            value=paper.get('notes', ''),
+                            key=f"note_{paper['arxiv_id']}"
+                        )
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("💾 Save Note", key=f"savenote_{paper['arxiv_id']}"):
+                                st.session_state.lt_memory.add_note(user_id, paper['arxiv_id'], note)
+                                st.success("Note saved!")
+                        with col2:
+                            if st.button("🗑️ Remove", key=f"remove_{paper['arxiv_id']}"):
+                                st.session_state.lt_memory.unsave_paper(user_id, paper['arxiv_id'])
+                                st.rerun()
+                        
+                        st.markdown(f"[📄 View on ArXiv](https://arxiv.org/abs/{paper['arxiv_id']})")
+            else:
+                st.info("No saved papers yet. Use the chat or search to find and save papers!")
+        
+        with tab2:
+            history = st.session_state.lt_memory.get_search_history(user_id, limit=20)
+            
+            if history:
+                st.markdown("**Recent Searches**")
+                
+                for search in history:
+                    st.markdown(f"- **{search['query']}** ({search['results_count']} results) - {search['timestamp']}")
+            else:
+                st.info("No search history yet.")
+        
+        with tab3:
+            st.markdown("### Your Activity")
+            
+            saved_count = len(st.session_state.lt_memory.get_saved_papers(user_id))
+            search_count = len(st.session_state.lt_memory.get_search_history(user_id, limit=100))
+            frequent = st.session_state.lt_memory.get_frequent_topics(user_id, limit=5)
+            
+            col1, col2 = st.columns(2)
             with col1:
-                st.markdown(f"**ArXiv ID:** {paper['arxiv_id']}")
-                st.markdown(f"**Published:** {paper.get('published_date', 'N/A')}")
-                
-                if paper.get('abstract'):
-                    st.markdown("**Abstract:**")
-                    st.markdown(paper['abstract'])
-            
+                st.metric("Papers Saved", saved_count)
             with col2:
-                st.markdown("**Status:**")
-                if paper['pdf_downloaded']:
-                    st.markdown("✅ PDF Downloaded")
-                if paper['processed']:
-                    st.markdown("✅ Parsed")
-                if paper['has_embeddings']:
-                    st.markdown("✅ Embeddings")
-                
-                st.markdown(f"[📄 View on ArXiv](https://arxiv.org/abs/{paper['arxiv_id']})")
+                st.metric("Searches Made", search_count)
+            
+            if frequent:
+                st.markdown("**Your Top Topics:**")
+                for topic in frequent:
+                    st.markdown(f"- {topic}")
+
 
 # Footer
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown("""
-    <div style='text-align: center; padding: 2rem; border-top: 1px solid #e2e8f0;'>
-        <p style='color: #64748b;'>RAG Research Bot v1.0 • Built with Streamlit</p>
+    <div style='text-align: center; padding: 1rem; border-top: 1px solid #e2e8f0;'>
+        <p style='color: #64748b;'>RAG Research Bot v2.0 • Agent + Memory + Reranking</p>
     </div>
 """, unsafe_allow_html=True)
