@@ -421,6 +421,26 @@ class DatabaseManager:
 
         return summaries
 
+    def get_last_pipeline_run(self) -> Optional[Dict]:
+        """Get information about the last pipeline run"""
+        self.cursor.execute("""
+        SELECT start_time, end_time, status, papers_fetched, papers_processed
+        FROM pipeline_runs
+        ORDER BY id DESC
+        LIMIT 1
+        """)
+
+        row = self.cursor.fetchone()
+        if row:
+            return {
+                'start_time': row[0],
+                'end_time': row[1],
+                'status': row[2],
+                'papers_fetched': row[3],
+                'papers_processed': row[4]
+            }
+        return None
+
     def close(self):
         """Close database connection"""
         self.conn.close()

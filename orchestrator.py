@@ -166,27 +166,9 @@ class PipelineOrchestrator:
         if self.summarizer_enabled and self.summarizer:
             summary_stats = self.summarizer.get_summary_stats()
             stats.update(summary_stats)
-        
+
         # Get last run info
-        self.db.cursor.execute("""
-        SELECT start_time, end_time, status, papers_fetched, papers_processed
-        FROM pipeline_runs
-        ORDER BY id DESC
-        LIMIT 1
-        """)
-        
-        last_run = self.db.cursor.fetchone()
-        
-        if last_run:
-            stats['last_run'] = {
-                'start_time': last_run[0],
-                'end_time': last_run[1],
-                'status': last_run[2],
-                'papers_fetched': last_run[3],
-                'papers_processed': last_run[4]
-            }
-        else:
-            stats['last_run'] = None
+        stats['last_run'] = self.db.get_last_pipeline_run()
         
         return stats
     
