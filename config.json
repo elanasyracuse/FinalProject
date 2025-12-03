@@ -22,7 +22,7 @@
   "chunk_size": 1000,
   "chunk_overlap": 200,
 
-  "fine_tuned_model": "",
+  "fine_tuned_model": "ft:gpt-4.1-nano-2025-04-14:personal::ChkwX2GO",
   "fallback_model": "gpt-4o-mini",
   "summarization_enabled": true,
   "summary_temperature": 0.2,
