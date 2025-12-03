@@ -339,7 +339,15 @@ class DatabaseManager:
 
         row = self.cursor.fetchone()
         if row:
-            return dict(row)
+            result = dict(row)
+            # DEBUG: Log what we're returning
+            logger.info(f"Retrieved summary for {paper_id}")
+            logger.info(f"Keys: {list(result.keys())}")
+            logger.info(f"Has abstract_summary: {bool(result.get('abstract_summary'))}")
+            logger.info(f"Abstract length: {len(result.get('abstract_summary', ''))}")
+            logger.info(f"Abstract value type: {type(result.get('abstract_summary'))}")
+            logger.info(f"Abstract first 50 chars: {result.get('abstract_summary', '')[:50]}")
+            return result
         return None
 
     def get_papers_without_summaries(self, limit: int = 50) -> List[Dict]:

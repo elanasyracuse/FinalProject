@@ -331,35 +331,54 @@ if page == "🔍 Search Papers":
                             tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Methodology", "Results", "Related Work"])
 
                             with tab1:
-                                if summary.get('abstract_summary'):
+                                abstract = summary.get('abstract_summary', '').strip() if summary.get('abstract_summary') else ''
+                                if abstract:
                                     st.markdown("**Abstract:**")
-                                    st.markdown(summary['abstract_summary'])
+                                    st.markdown(abstract)
+                                else:
+                                    st.info("No abstract available")
+
                                 if summary.get('date'):
-                                    st.markdown(f"**Date:** {summary['date']}")
+                                    st.markdown(f"**Date:** {summary.get('date')}")
                                 if summary.get('authors'):
-                                    st.markdown(f"**Authors:** {summary['authors']}")
+                                    st.markdown(f"**Authors:** {summary.get('authors')}")
 
                             with tab2:
-                                if summary.get('methodology'):
-                                    st.markdown(summary['methodology'])
+                                methodology = summary.get('methodology', '').strip() if summary.get('methodology') else ''
+                                if methodology:
+                                    st.markdown(methodology)
                                 else:
                                     st.info("No methodology information available")
 
                             with tab3:
-                                if summary.get('results'):
-                                    st.markdown(summary['results'])
+                                results = summary.get('results', '').strip() if summary.get('results') else ''
+                                if results:
+                                    st.markdown(results)
                                 else:
                                     st.info("No results information available")
 
                             with tab4:
-                                if summary.get('related_work'):
-                                    st.markdown(summary['related_work'])
+                                related_work = summary.get('related_work', '').strip() if summary.get('related_work') else ''
+                                if related_work:
+                                    st.markdown(related_work)
                                 else:
                                     st.info("No related work information available")
 
                             # Show quality score if available
                             if summary.get('structure_score'):
                                 st.caption(f"Summary Quality: {summary['structure_score']:.0f}%")
+
+                            # Fallback: if all structured fields are empty, show raw summary
+                            all_empty = not any([
+                                summary.get('abstract_summary', '').strip(),
+                                summary.get('methodology', '').strip(),
+                                summary.get('results', '').strip(),
+                                summary.get('related_work', '').strip()
+                            ])
+
+                            if all_empty and summary.get('raw_summary'):
+                                st.warning("Structured sections unavailable - showing raw summary:")
+                                st.text_area("Raw Summary", summary['raw_summary'], height=300, disabled=True)
                         else:
                             # Fallback to abstract if no summary
                             st.markdown("**Abstract:**")
@@ -633,34 +652,53 @@ elif page == "📚 Browse Papers":
                         tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Methodology", "Results", "Related Work"])
 
                         with tab1:
-                            if summary.get('abstract_summary'):
+                            abstract = summary.get('abstract_summary', '').strip() if summary.get('abstract_summary') else ''
+                            if abstract:
                                 st.markdown("**Abstract:**")
-                                st.markdown(summary['abstract_summary'])
+                                st.markdown(abstract)
+                            else:
+                                st.info("No abstract available")
+
                             if summary.get('date'):
-                                st.markdown(f"**Date:** {summary['date']}")
+                                st.markdown(f"**Date:** {summary.get('date')}")
                             if summary.get('authors'):
-                                st.markdown(f"**Authors:** {summary['authors']}")
+                                st.markdown(f"**Authors:** {summary.get('authors')}")
 
                         with tab2:
-                            if summary.get('methodology'):
-                                st.markdown(summary['methodology'])
+                            methodology = summary.get('methodology', '').strip() if summary.get('methodology') else ''
+                            if methodology:
+                                st.markdown(methodology)
                             else:
                                 st.info("No methodology information available")
 
                         with tab3:
-                            if summary.get('results'):
-                                st.markdown(summary['results'])
+                            results = summary.get('results', '').strip() if summary.get('results') else ''
+                            if results:
+                                st.markdown(results)
                             else:
                                 st.info("No results information available")
 
                         with tab4:
-                            if summary.get('related_work'):
-                                st.markdown(summary['related_work'])
+                            related_work = summary.get('related_work', '').strip() if summary.get('related_work') else ''
+                            if related_work:
+                                st.markdown(related_work)
                             else:
                                 st.info("No related work information available")
 
                         if summary.get('structure_score'):
                             st.caption(f"Summary Quality: {summary['structure_score']:.0f}%")
+
+                        # Fallback: if all structured fields are empty, show raw summary
+                        all_empty = not any([
+                            summary.get('abstract_summary', '').strip(),
+                            summary.get('methodology', '').strip(),
+                            summary.get('results', '').strip(),
+                            summary.get('related_work', '').strip()
+                        ])
+
+                        if all_empty and summary.get('raw_summary'):
+                            st.warning("Structured sections unavailable - showing raw summary:")
+                            st.text_area("Raw Summary", summary['raw_summary'], height=300, disabled=True)
                 else:
                     # Show abstract if no summary
                     if paper.get('abstract'):
