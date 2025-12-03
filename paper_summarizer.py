@@ -225,23 +225,48 @@ Remember: Use the EXACT section headers shown above."""
         sections = {}
 
         # Define section patterns (case-insensitive, flexible formatting)
+        # Try both **Section:** and Section: formats
         section_patterns = {
-            'title': r'\*\*Title:\*\*\s*(.*?)(?=\*\*|$)',
-            'authors': r'\*\*Authors:\*\*\s*(.*?)(?=\*\*|$)',
-            'date': r'\*\*Date:\*\*\s*(.*?)(?=\*\*|$)',
-            'abstract': r'\*\*Abstract:\*\*\s*(.*?)(?=\*\*|$)',
-            'methodology': r'\*\*Methodology:\*\*\s*(.*?)(?=\*\*|$)',
-            'results': r'\*\*Results:\*\*\s*(.*?)(?=\*\*|$)',
-            'related_work': r'\*\*Related Work:\*\*\s*(.*?)(?=\*\*|$)'
+            'title': [
+                r'\*\*Title:\*\*\s*(.*?)(?=\n\n|\*\*|\n[A-Z]|$)',
+                r'Title:\s*(.*?)(?=\n\n|\n[A-Z]|$)'
+            ],
+            'authors': [
+                r'\*\*Authors:\*\*\s*(.*?)(?=\n\n|\*\*|\n[A-Z]|$)',
+                r'Authors:\s*(.*?)(?=\n\n|\n[A-Z]|$)'
+            ],
+            'date': [
+                r'\*\*Date:\*\*\s*(.*?)(?=\n\n|\*\*|\n[A-Z]|$)',
+                r'Date:\s*(.*?)(?=\n\n|\n[A-Z]|$)'
+            ],
+            'abstract': [
+                r'\*\*Abstract:\*\*\s*(.*?)(?=\n\n|\*\*|\n[A-Z][a-z]+:|$)',
+                r'Abstract:\s*(.*?)(?=\n\n|\n[A-Z][a-z]+:|$)'
+            ],
+            'methodology': [
+                r'\*\*Methodology:\*\*\s*(.*?)(?=\n\n|\*\*|\n[A-Z][a-z]+:|$)',
+                r'Methodology:\s*(.*?)(?=\n\n|\n[A-Z][a-z]+:|$)'
+            ],
+            'results': [
+                r'\*\*Results:\*\*\s*(.*?)(?=\n\n|\*\*|\n[A-Z][a-z]+:|$)',
+                r'Results:\s*(.*?)(?=\n\n|\n[A-Z][a-z]+:|$)'
+            ],
+            'related_work': [
+                r'\*\*Related Work:\*\*\s*(.*?)(?=\n\n|\*\*|$)',
+                r'Related Work:\s*(.*?)(?=\n\n|$)'
+            ]
         }
 
-        for section_name, pattern in section_patterns.items():
-            match = re.search(pattern, summary_text, re.DOTALL | re.IGNORECASE)
-            if match:
-                content = match.group(1).strip()
-                sections[section_name] = content
-            else:
-                sections[section_name] = ''
+        for section_name, patterns in section_patterns.items():
+            content = ''
+            for pattern in patterns:
+                match = re.search(pattern, summary_text, re.DOTALL | re.IGNORECASE)
+                if match:
+                    content = match.group(1).strip()
+                    break
+
+            sections[section_name] = content
+            if not content:
                 logger.warning(f"Section '{section_name}' not found in summary")
 
         return sections
