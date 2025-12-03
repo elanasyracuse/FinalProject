@@ -1,6 +1,6 @@
 """
 Paper Summarizer - Generates structured summaries using fine-tuned model
-Author: Integration for FinalProject
+Author: Nikita
 """
 
 import json
