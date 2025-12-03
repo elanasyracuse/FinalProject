@@ -243,18 +243,28 @@ class VectorStore:
                 # Get paper details
                 paper = self.db.get_paper(result['paper_id'])
                 if paper:
-                    unique_results.append({
+                    paper_result = {
                         'arxiv_id': paper['arxiv_id'],
                         'title': paper['title'],
-                        'abstract': paper['abstract'][:200] + '...',
+                        'abstract': paper['abstract'][:200] + '...' if paper.get('abstract') else '',
                         'similarity': result['similarity'],
                         'relevant_chunk': result['chunk_text'][:200] + '...'
-                    })
+                    }
+
+                    # Get summary if available
+                    summary = self.db.get_paper_summary(result['paper_id'])
+                    if summary:
+                        paper_result['summary'] = summary
+                        paper_result['has_summary'] = True
+                    else:
+                        paper_result['has_summary'] = False
+
+                    unique_results.append(paper_result)
                     seen_papers.add(result['paper_id'])
-                    
+
                     if len(unique_results) >= n_results:
                         break
-        
+
         return unique_results
     
     def _cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:

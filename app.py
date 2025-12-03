@@ -316,20 +316,67 @@ if page == "🔍 Search Papers":
             for i, paper in enumerate(results['results'], 1):
                 with st.expander(f"#{i} - {paper['title']}", expanded=(i == 1)):
                     col1, col2 = st.columns([3, 1])
-                    
+
                     with col1:
                         st.markdown(f"**ArXiv ID:** {paper['arxiv_id']}")
                         st.markdown(f"**Similarity:** {paper['similarity']:.2%}")
-                        
-                        st.markdown("**Abstract:**")
-                        st.markdown(paper['abstract'])
-                        
+
+                        # Show structured summary if available
+                        if paper.get('has_summary') and paper.get('summary'):
+                            summary = paper['summary']
+
+                            st.markdown("### Structured Summary")
+
+                            # Create tabs for different sections
+                            tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Methodology", "Results", "Related Work"])
+
+                            with tab1:
+                                if summary.get('abstract_summary'):
+                                    st.markdown("**Abstract:**")
+                                    st.markdown(summary['abstract_summary'])
+                                if summary.get('date'):
+                                    st.markdown(f"**Date:** {summary['date']}")
+                                if summary.get('authors'):
+                                    st.markdown(f"**Authors:** {summary['authors']}")
+
+                            with tab2:
+                                if summary.get('methodology'):
+                                    st.markdown(summary['methodology'])
+                                else:
+                                    st.info("No methodology information available")
+
+                            with tab3:
+                                if summary.get('results'):
+                                    st.markdown(summary['results'])
+                                else:
+                                    st.info("No results information available")
+
+                            with tab4:
+                                if summary.get('related_work'):
+                                    st.markdown(summary['related_work'])
+                                else:
+                                    st.info("No related work information available")
+
+                            # Show quality score if available
+                            if summary.get('structure_score'):
+                                st.caption(f"Summary Quality: {summary['structure_score']:.0f}%")
+                        else:
+                            # Fallback to abstract if no summary
+                            st.markdown("**Abstract:**")
+                            st.markdown(paper['abstract'])
+
                         if paper.get('relevant_chunk'):
                             st.markdown("**Most Relevant Section:**")
                             st.info(paper['relevant_chunk'])
-                    
+
                     with col2:
                         st.markdown(f"[📄 View on ArXiv](https://arxiv.org/abs/{paper['arxiv_id']})")
+
+                        # Show summary status
+                        if paper.get('has_summary'):
+                            st.success("Summary Available")
+                        else:
+                            st.warning("No Summary")
             
             # Email section
             st.markdown("---")
@@ -368,8 +415,10 @@ elif page == "📊 Dashboard":
     st.markdown("<br>", unsafe_allow_html=True)
     
     stats = orchestrator.get_status()
+
+    # Top row - Main metrics
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         st.metric("Total Papers", stats['total_papers'])
     with col2:
@@ -378,6 +427,28 @@ elif page == "📊 Dashboard":
         st.metric("Embedded", stats['papers_with_embeddings'])
     with col4:
         st.metric("Total Chunks", stats['total_chunks'])
+
+    # Second row - Summary metrics (if available)
+    if stats.get('total_summaries') is not None:
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Summaries Generated", stats.get('total_summaries', 0))
+        with col2:
+            avg_score = stats.get('avg_structure_score', 0)
+            st.metric("Avg Quality Score", f"{avg_score}%")
+        with col3:
+            coverage = 0
+            if stats['total_papers'] > 0:
+                coverage = (stats.get('papers_with_summaries', 0) / stats['total_papers']) * 100
+            st.metric("Summary Coverage", f"{coverage:.1f}%")
+        with col4:
+            model_name = stats.get('fine_tuned_model', 'Not configured')
+            if model_name and model_name != 'Not configured':
+                st.metric("Model Status", "Active")
+            else:
+                st.metric("Model Status", "Fallback")
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
@@ -396,14 +467,22 @@ elif page == "📊 Dashboard":
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Include summaries in pipeline if available
+    stages = ['Fetched', 'Downloaded', 'Parsed', 'Embedded']
+    counts = [
+        stats['total_papers'],
+        stats.get('processed_papers', 0),
+        stats.get('processed_papers', 0),
+        stats.get('papers_with_embeddings', 0)
+    ]
+
+    if stats.get('total_summaries') is not None:
+        stages.append('Summarized')
+        counts.append(stats.get('papers_with_summaries', 0))
+
     pipeline_data = {
-        'Stage': ['Fetched', 'Downloaded', 'Parsed', 'Embedded'],
-        'Count': [
-            stats['total_papers'],
-            stats.get('processed_papers', 0),
-            stats.get('processed_papers', 0),
-            stats.get('papers_with_embeddings', 0)
-        ]
+        'Stage': stages,
+        'Count': counts
     }
     
     col1, col2 = st.columns(2)
