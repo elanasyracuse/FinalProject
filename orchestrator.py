@@ -175,12 +175,12 @@ class PipelineOrchestrator:
     def get_recent_papers(self, limit: int = 20) -> list:
         """Get recently added papers"""
         self.db.cursor.execute("""
-        SELECT arxiv_id, title, abstract, published_date, pdf_downloaded, processed, embedding_created
+        SELECT arxiv_id, title, abstract, published_date, pdf_downloaded, processed, embedding_created, summary_generated
         FROM papers
         ORDER BY fetched_date DESC
         LIMIT ?
         """, (limit,))
-        
+
         papers = []
         for row in self.db.cursor.fetchall():
             papers.append({
@@ -190,7 +190,8 @@ class PipelineOrchestrator:
                 'published_date': row[3],
                 'pdf_downloaded': bool(row[4]),
                 'processed': bool(row[5]),
-                'has_embeddings': bool(row[6])
+                'has_embeddings': bool(row[6]),
+                'has_summary': bool(row[7])
             })
         
         return papers
