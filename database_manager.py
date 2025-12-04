@@ -1,7 +1,4 @@
-"""
-Database Manager - Core SQLite implementation
-Author: Amaan
-"""
+"""Database Manager - Core SQLite implementation with user memory tables"""
 
 import sqlite3
 import json
@@ -15,39 +12,37 @@ logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     """Core database manager for all RAG bot data"""
-    
+
     def __init__(self, db_path="./data/ragbot.db"):
         self.db_path = db_path
-        
-        # Create the directory if it doesn't exist
+
         db_dir = os.path.dirname(db_path)
-        if db_dir:  # Only create if there's actually a directory path
+        if db_dir:
             os.makedirs(db_dir, exist_ok=True)
             if not os.path.exists(db_path):
                 logger.info(f"Created database directory: {db_dir}")
-        
+
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
         self._create_tables()
+        self._create_user_tables()
         logger.info(f"Database initialized at {db_path}")
     
     def _create_tables(self):
         """Create all necessary tables"""
-        
-        # Main papers table
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS papers (
             arxiv_id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             abstract TEXT,
-            authors TEXT,  -- JSON array stored as text
+            authors TEXT,
             published_date DATETIME,
-            categories TEXT,  -- JSON array
+            categories TEXT,
             pdf_url TEXT,
             pdf_downloaded BOOLEAN DEFAULT 0,
             full_text TEXT,
-            sections TEXT,  -- JSON object
+            sections TEXT,
             processed BOOLEAN DEFAULT 0,
             embedding_created BOOLEAN DEFAULT 0,
             summary_generated BOOLEAN DEFAULT 0,
@@ -55,7 +50,6 @@ class DatabaseManager:
         )
         """)
         
-        # Embeddings table
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS embeddings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +63,6 @@ class DatabaseManager:
         )
         """)
         
-        # Pipeline runs tracking
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS pipeline_runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,8 +74,7 @@ class DatabaseManager:
             error_message TEXT
         )
         """)
-        
-        # Paper summaries table (for fine-tuned model output)
+
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS paper_summaries (
             paper_id TEXT PRIMARY KEY,
@@ -94,23 +86,66 @@ class DatabaseManager:
             results TEXT,
             related_work TEXT,
             raw_summary TEXT,
-            structure_score FLOAT,
+            structure_score REAL,
             created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (paper_id) REFERENCES papers(arxiv_id)
         )
         """)
 
-        # Create indices for performance
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_processed ON papers(processed)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_embeddings_paper ON embeddings(paper_id)")
-        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_summaries_paper ON paper_summaries(paper_id)")
-
         self.conn.commit()
+    
+    def _create_user_tables(self):
+        """Create user-related tables for long-term memory"""
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            name TEXT,
+            interests TEXT,
+            expertise_level TEXT DEFAULT 'intermediate',
+            preferred_style TEXT DEFAULT 'detailed',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_active DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS search_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            query TEXT NOT NULL,
+            results_count INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES user_profiles(id)
+        )
+        """)
+        
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_papers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            arxiv_id TEXT NOT NULL,
+            is_saved BOOLEAN DEFAULT 0,
+            is_liked BOOLEAN DEFAULT 0,
+            notes TEXT,
+            tags TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES user_profiles(id),
+            UNIQUE(user_id, arxiv_id)
+        )
+        """)
+        
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_email ON user_profiles(email)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_search_user ON search_history(user_id)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_papers ON user_papers(user_id)")
+        self.conn.commit()
+        logger.info("User tables initialized")
     
     def insert_paper(self, paper_data: Dict) -> bool:
         """Insert or update a paper"""
         try:
-            # Convert lists to JSON strings
             authors = json.dumps(paper_data.get('authors', []))
             categories = json.dumps(paper_data.get('categories', []))
             
@@ -162,7 +197,6 @@ class DatabaseManager:
             return None
         
         paper = dict(row)
-        # Parse JSON fields
         paper['authors'] = json.loads(paper['authors']) if paper['authors'] else []
         paper['categories'] = json.loads(paper['categories']) if paper['categories'] else []
         paper['sections'] = json.loads(paper['sections']) if paper['sections'] else {}
@@ -188,7 +222,7 @@ class DatabaseManager:
         return papers
     
     def get_papers_for_summarization(self, limit: int = 20) -> List[Dict]:
-        """Get papers ready for Nikita's summarization"""
+        """Get papers ready for summarization"""
         self.cursor.execute("""
         SELECT * FROM papers
         WHERE processed = 1 AND summary_generated = 0 AND full_text IS NOT NULL
@@ -217,7 +251,6 @@ class DatabaseManager:
             VALUES (?, ?, ?, ?, ?)
             """, (paper_id, chunk_index, chunk_text, embedding_blob, chunk_type))
             
-            # Mark paper as having embeddings
             self.cursor.execute("""
             UPDATE papers SET embedding_created = 1 WHERE arxiv_id = ?
             """, (paper_id,))
@@ -290,22 +323,29 @@ class DatabaseManager:
     def get_stats(self) -> Dict:
         """Get database statistics"""
         stats = {}
-
+        
         self.cursor.execute("SELECT COUNT(*) FROM papers")
         stats['total_papers'] = self.cursor.fetchone()[0]
-
+        
         self.cursor.execute("SELECT COUNT(*) FROM papers WHERE processed = 1")
         stats['processed_papers'] = self.cursor.fetchone()[0]
-
+        
         self.cursor.execute("SELECT COUNT(*) FROM papers WHERE embedding_created = 1")
         stats['papers_with_embeddings'] = self.cursor.fetchone()[0]
-
+        
         self.cursor.execute("SELECT COUNT(*) FROM embeddings")
         stats['total_chunks'] = self.cursor.fetchone()[0]
+        
+        self.cursor.execute("SELECT COUNT(*) FROM user_profiles")
+        stats['total_users'] = self.cursor.fetchone()[0]
+
+        self.cursor.execute("SELECT COUNT(*) FROM search_history")
+        stats['total_searches'] = self.cursor.fetchone()[0]
+
+        self.cursor.execute("SELECT COUNT(*) FROM user_papers WHERE is_saved = 1")
+        stats['total_saved_papers'] = self.cursor.fetchone()[0]
 
         return stats
-
-    # ========== Paper Summary Methods (New) ==========
 
     def store_paper_summary(self, paper_id: str, title: str, authors: str, date: str,
                            abstract_summary: str, methodology: str, results: str,
@@ -339,15 +379,7 @@ class DatabaseManager:
 
         row = self.cursor.fetchone()
         if row:
-            result = dict(row)
-            # DEBUG: Log what we're returning
-            logger.info(f"Retrieved summary for {paper_id}")
-            logger.info(f"Keys: {list(result.keys())}")
-            logger.info(f"Has abstract_summary: {bool(result.get('abstract_summary'))}")
-            logger.info(f"Abstract length: {len(result.get('abstract_summary', ''))}")
-            logger.info(f"Abstract value type: {type(result.get('abstract_summary'))}")
-            logger.info(f"Abstract first 50 chars: {result.get('abstract_summary', '')[:50]}")
-            return result
+            return dict(row)
         return None
 
     def get_papers_without_summaries(self, limit: int = 50) -> List[Dict]:
