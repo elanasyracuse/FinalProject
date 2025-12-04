@@ -82,10 +82,29 @@ class DatabaseManager:
         )
         """)
         
+        # Paper summaries table (for fine-tuned model output)
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS paper_summaries (
+            paper_id TEXT PRIMARY KEY,
+            title TEXT,
+            authors TEXT,
+            date TEXT,
+            abstract_summary TEXT,
+            methodology TEXT,
+            results TEXT,
+            related_work TEXT,
+            raw_summary TEXT,
+            structure_score FLOAT,
+            created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (paper_id) REFERENCES papers(arxiv_id)
+        )
+        """)
+
         # Create indices for performance
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_processed ON papers(processed)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_embeddings_paper ON embeddings(paper_id)")
-        
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_summaries_paper ON paper_summaries(paper_id)")
+
         self.conn.commit()
     
     def insert_paper(self, paper_data: Dict) -> bool:
@@ -271,21 +290,165 @@ class DatabaseManager:
     def get_stats(self) -> Dict:
         """Get database statistics"""
         stats = {}
-        
+
         self.cursor.execute("SELECT COUNT(*) FROM papers")
         stats['total_papers'] = self.cursor.fetchone()[0]
-        
+
         self.cursor.execute("SELECT COUNT(*) FROM papers WHERE processed = 1")
         stats['processed_papers'] = self.cursor.fetchone()[0]
-        
+
         self.cursor.execute("SELECT COUNT(*) FROM papers WHERE embedding_created = 1")
         stats['papers_with_embeddings'] = self.cursor.fetchone()[0]
-        
+
         self.cursor.execute("SELECT COUNT(*) FROM embeddings")
         stats['total_chunks'] = self.cursor.fetchone()[0]
-        
+
         return stats
-    
+
+    # ========== Paper Summary Methods (New) ==========
+
+    def store_paper_summary(self, paper_id: str, title: str, authors: str, date: str,
+                           abstract_summary: str, methodology: str, results: str,
+                           related_work: str, raw_summary: str, structure_score: float) -> bool:
+        """Store structured summary for a paper"""
+        try:
+            self.cursor.execute("""
+            INSERT OR REPLACE INTO paper_summaries (
+                paper_id, title, authors, date, abstract_summary,
+                methodology, results, related_work, raw_summary, structure_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (paper_id, title, authors, date, abstract_summary,
+                  methodology, results, related_work, raw_summary, structure_score))
+
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error storing summary for {paper_id}: {e}")
+            self.conn.rollback()
+            return False
+
+    def get_paper_summary(self, paper_id: str) -> Optional[Dict]:
+        """Get structured summary for a paper"""
+        self.cursor.execute("""
+        SELECT paper_id, title, authors, date, abstract_summary,
+               methodology, results, related_work, raw_summary,
+               structure_score, created_date
+        FROM paper_summaries
+        WHERE paper_id = ?
+        """, (paper_id,))
+
+        row = self.cursor.fetchone()
+        if row:
+            result = dict(row)
+            # DEBUG: Log what we're returning
+            logger.info(f"Retrieved summary for {paper_id}")
+            logger.info(f"Keys: {list(result.keys())}")
+            logger.info(f"Has abstract_summary: {bool(result.get('abstract_summary'))}")
+            logger.info(f"Abstract length: {len(result.get('abstract_summary', ''))}")
+            logger.info(f"Abstract value type: {type(result.get('abstract_summary'))}")
+            logger.info(f"Abstract first 50 chars: {result.get('abstract_summary', '')[:50]}")
+            return result
+        return None
+
+    def get_papers_without_summaries(self, limit: int = 50) -> List[Dict]:
+        """Get papers that need summaries (processed but not summarized)"""
+        self.cursor.execute("""
+        SELECT p.arxiv_id, p.title, p.abstract, p.full_text, p.authors
+        FROM papers p
+        LEFT JOIN paper_summaries ps ON p.arxiv_id = ps.paper_id
+        WHERE p.processed = 1 AND ps.paper_id IS NULL
+        LIMIT ?
+        """, (limit,))
+
+        papers = []
+        for row in self.cursor.fetchall():
+            paper = dict(row)
+            if paper.get('authors'):
+                paper['authors'] = json.loads(paper['authors'])
+            papers.append(paper)
+
+        return papers
+
+    def mark_summary_generated(self, paper_id: str) -> bool:
+        """Mark a paper as having a summary generated"""
+        try:
+            self.cursor.execute("""
+            UPDATE papers SET summary_generated = 1 WHERE arxiv_id = ?
+            """, (paper_id,))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error marking summary for {paper_id}: {e}")
+            return False
+
+    def delete_paper_summary(self, paper_id: str) -> bool:
+        """Delete a paper summary (for regeneration)"""
+        try:
+            self.cursor.execute("DELETE FROM paper_summaries WHERE paper_id = ?", (paper_id,))
+            self.cursor.execute("UPDATE papers SET summary_generated = 0 WHERE arxiv_id = ?", (paper_id,))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting summary for {paper_id}: {e}")
+            return False
+
+    def get_summary_stats(self) -> Dict:
+        """Get statistics about summaries"""
+        stats = {}
+
+        self.cursor.execute("SELECT COUNT(*) FROM paper_summaries")
+        stats['total_summaries'] = self.cursor.fetchone()[0]
+
+        self.cursor.execute("SELECT AVG(structure_score) FROM paper_summaries")
+        avg_score = self.cursor.fetchone()[0]
+        stats['avg_structure_score'] = round(avg_score, 2) if avg_score else 0.0
+
+        self.cursor.execute("SELECT COUNT(*) FROM papers WHERE summary_generated = 1")
+        stats['papers_with_summaries'] = self.cursor.fetchone()[0]
+
+        return stats
+
+    def get_all_summaries(self, limit: int = 100) -> List[Dict]:
+        """Get all paper summaries with basic paper info"""
+        self.cursor.execute("""
+        SELECT ps.paper_id, ps.title, ps.authors, ps.date,
+               ps.abstract_summary, ps.structure_score, ps.created_date,
+               p.published_date, p.categories
+        FROM paper_summaries ps
+        JOIN papers p ON ps.paper_id = p.arxiv_id
+        ORDER BY ps.created_date DESC
+        LIMIT ?
+        """, (limit,))
+
+        summaries = []
+        for row in self.cursor.fetchall():
+            summary = dict(row)
+            if summary.get('categories'):
+                summary['categories'] = json.loads(summary['categories'])
+            summaries.append(summary)
+
+        return summaries
+
+    def get_last_pipeline_run(self) -> Optional[Dict]:
+        """Get information about the last pipeline run"""
+        self.cursor.execute("""
+        SELECT start_time, end_time, status, papers_fetched, papers_processed
+        FROM pipeline_runs
+        ORDER BY id DESC
+        LIMIT 1
+        """)
+
+        row = self.cursor.fetchone()
+        if row:
+            return {
+                'start_time': row[0],
+                'end_time': row[1],
+                'status': row[2],
+                'papers_fetched': row[3],
+                'papers_processed': row[4]
+            }
+        return None
+
     def close(self):
         """Close database connection"""
         self.conn.close()

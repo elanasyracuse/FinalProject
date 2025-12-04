@@ -316,20 +316,86 @@ if page == "🔍 Search Papers":
             for i, paper in enumerate(results['results'], 1):
                 with st.expander(f"#{i} - {paper['title']}", expanded=(i == 1)):
                     col1, col2 = st.columns([3, 1])
-                    
+
                     with col1:
                         st.markdown(f"**ArXiv ID:** {paper['arxiv_id']}")
                         st.markdown(f"**Similarity:** {paper['similarity']:.2%}")
-                        
-                        st.markdown("**Abstract:**")
-                        st.markdown(paper['abstract'])
-                        
+
+                        # Show structured summary if available
+                        if paper.get('has_summary') and paper.get('summary'):
+                            summary = paper['summary']
+
+                            st.markdown("### Structured Summary")
+
+                            # Create tabs for different sections
+                            tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Methodology", "Results", "Related Work"])
+
+                            with tab1:
+                                abstract = summary.get('abstract_summary', '').strip() if summary.get('abstract_summary') else ''
+                                if abstract:
+                                    st.markdown("**Abstract:**")
+                                    st.markdown(abstract)
+                                else:
+                                    st.info("No abstract available")
+
+                                if summary.get('date'):
+                                    st.markdown(f"**Date:** {summary.get('date')}")
+                                if summary.get('authors'):
+                                    st.markdown(f"**Authors:** {summary.get('authors')}")
+
+                            with tab2:
+                                methodology = summary.get('methodology', '').strip() if summary.get('methodology') else ''
+                                if methodology:
+                                    st.markdown(methodology)
+                                else:
+                                    st.info("No methodology information available")
+
+                            with tab3:
+                                results = summary.get('results', '').strip() if summary.get('results') else ''
+                                if results:
+                                    st.markdown(results)
+                                else:
+                                    st.info("No results information available")
+
+                            with tab4:
+                                related_work = summary.get('related_work', '').strip() if summary.get('related_work') else ''
+                                if related_work:
+                                    st.markdown(related_work)
+                                else:
+                                    st.info("No related work information available")
+
+                            # Show quality score if available
+                            if summary.get('structure_score'):
+                                st.caption(f"Summary Quality: {summary['structure_score']:.0f}%")
+
+                            # Fallback: if all structured fields are empty, show raw summary
+                            all_empty = not any([
+                                summary.get('abstract_summary', '').strip(),
+                                summary.get('methodology', '').strip(),
+                                summary.get('results', '').strip(),
+                                summary.get('related_work', '').strip()
+                            ])
+
+                            if all_empty and summary.get('raw_summary'):
+                                st.warning("Structured sections unavailable - showing raw summary:")
+                                st.text_area("Raw Summary", summary['raw_summary'], height=300, disabled=True)
+                        else:
+                            # Fallback to abstract if no summary
+                            st.markdown("**Abstract:**")
+                            st.markdown(paper['abstract'])
+
                         if paper.get('relevant_chunk'):
                             st.markdown("**Most Relevant Section:**")
                             st.info(paper['relevant_chunk'])
-                    
+
                     with col2:
                         st.markdown(f"[📄 View on ArXiv](https://arxiv.org/abs/{paper['arxiv_id']})")
+
+                        # Show summary status
+                        if paper.get('has_summary'):
+                            st.success("Summary Available")
+                        else:
+                            st.warning("No Summary")
             
             # Email section
             st.markdown("---")
@@ -368,8 +434,10 @@ elif page == "📊 Dashboard":
     st.markdown("<br>", unsafe_allow_html=True)
     
     stats = orchestrator.get_status()
+
+    # Top row - Main metrics
     col1, col2, col3, col4 = st.columns(4)
-    
+
     with col1:
         st.metric("Total Papers", stats['total_papers'])
     with col2:
@@ -378,6 +446,28 @@ elif page == "📊 Dashboard":
         st.metric("Embedded", stats['papers_with_embeddings'])
     with col4:
         st.metric("Total Chunks", stats['total_chunks'])
+
+    # Second row - Summary metrics (if available)
+    if stats.get('total_summaries') is not None:
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Summaries Generated", stats.get('total_summaries', 0))
+        with col2:
+            avg_score = stats.get('avg_structure_score', 0)
+            st.metric("Avg Quality Score", f"{avg_score}%")
+        with col3:
+            coverage = 0
+            if stats['total_papers'] > 0:
+                coverage = (stats.get('papers_with_summaries', 0) / stats['total_papers']) * 100
+            st.metric("Summary Coverage", f"{coverage:.1f}%")
+        with col4:
+            model_name = stats.get('fine_tuned_model', 'Not configured')
+            if model_name and model_name != 'Not configured':
+                st.metric("Model Status", "Active")
+            else:
+                st.metric("Model Status", "Fallback")
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
@@ -396,14 +486,22 @@ elif page == "📊 Dashboard":
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Include summaries in pipeline if available
+    stages = ['Fetched', 'Downloaded', 'Parsed', 'Embedded']
+    counts = [
+        stats['total_papers'],
+        stats.get('processed_papers', 0),
+        stats.get('processed_papers', 0),
+        stats.get('papers_with_embeddings', 0)
+    ]
+
+    if stats.get('total_summaries') is not None:
+        stages.append('Summarized')
+        counts.append(stats.get('papers_with_summaries', 0))
+
     pipeline_data = {
-        'Stage': ['Fetched', 'Downloaded', 'Parsed', 'Embedded'],
-        'Count': [
-            stats['total_papers'],
-            stats.get('processed_papers', 0),
-            stats.get('processed_papers', 0),
-            stats.get('papers_with_embeddings', 0)
-        ]
+        'Stage': stages,
+        'Count': counts
     }
     
     col1, col2 = st.columns(2)
@@ -444,18 +542,32 @@ elif page == "⚙️ Pipeline Control":
                 
                 if results['status'] == 'SUCCESS':
                     st.success("Pipeline completed successfully!")
-                    
+
                     fetch = results['steps'].get('fetch', {})
                     parse = results['steps'].get('parse', {})
                     embed = results['steps'].get('embeddings', {})
-                    
-                    st.markdown(f"""
+                    summaries = results['steps'].get('summaries', {})
+
+                    # Build results display
+                    results_text = f"""
                     **Results:**
                     - Papers fetched: {fetch.get('papers_stored', 0)}
                     - Papers parsed: {parse.get('success', 0)}
                     - Embeddings created: {embed.get('success', 0)}
-                    - API cost: ${embed.get('estimated_cost', 0):.4f}
-                    """)
+                    - Embedding API cost: ${embed.get('estimated_cost', 0):.4f}
+                    """
+
+                    # Add summary results if not skipped
+                    if not summaries.get('skipped', False):
+                        results_text += f"""
+                    - Summaries generated: {summaries.get('success', 0)}
+                    - Summary API cost: ${summaries.get('estimated_cost', 0):.4f}
+                    - **Total API cost: ${embed.get('estimated_cost', 0) + summaries.get('estimated_cost', 0):.4f}**
+                    """
+                    else:
+                        results_text += "\n- Summaries: Skipped (disabled or unavailable)"
+
+                    st.markdown(results_text)
                 else:
                     st.error(f"Pipeline failed: {results.get('error', 'Unknown error')}")
     
@@ -478,17 +590,30 @@ elif page == "⚙️ Pipeline Control":
                 st.success(f"Created embeddings for {embed_results['success']} papers")
                 st.info(f"API cost: ${embed_results['estimated_cost']:.4f}")
 
+        if st.button("📝 Generate Summaries Only"):
+            with st.spinner("Generating summaries..."):
+                if orchestrator.summarizer_enabled and orchestrator.summarizer:
+                    summary_results = orchestrator.summarizer.generate_summaries_batch(limit=max_papers)
+                    st.success(f"Generated summaries for {summary_results['success']} papers")
+                    st.info(f"API cost: ${summary_results['estimated_cost']:.4f}")
+                    if summary_results['failed']:
+                        st.warning(f"Failed: {len(summary_results['failed'])} papers")
+                else:
+                    st.error("Summarizer not available")
+
 elif page == "📚 Browse Papers":
     st.markdown("<h1 style='text-align: center;'>Browse Papers</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #94a3b8;'>Explore your research paper collection</p>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         filter_processed = st.checkbox("Only processed papers", value=False)
     with col2:
         filter_embedded = st.checkbox("Only with embeddings", value=False)
     with col3:
+        filter_summarized = st.checkbox("Only with summaries", value=False)
+    with col4:
         sort_order = st.selectbox("Sort by", ["Recent", "Title"])
     
     papers = orchestrator.get_recent_papers(50)
@@ -497,6 +622,8 @@ elif page == "📚 Browse Papers":
         filtered_papers = [p for p in filtered_papers if p['processed']]
     if filter_embedded:
         filtered_papers = [p for p in filtered_papers if p['has_embeddings']]
+    if filter_summarized:
+        filtered_papers = [p for p in filtered_papers if p.get('has_summary', False)]
     
     if sort_order == "Title":
         filtered_papers.sort(key=lambda x: x['title'])
@@ -507,15 +634,77 @@ elif page == "📚 Browse Papers":
     for paper in filtered_papers:
         with st.expander(f"{paper['title'][:100]}..."):
             col1, col2 = st.columns([3, 1])
-            
+
             with col1:
                 st.markdown(f"**ArXiv ID:** {paper['arxiv_id']}")
                 st.markdown(f"**Published:** {paper.get('published_date', 'N/A')}")
-                
-                if paper.get('abstract'):
-                    st.markdown("**Abstract:**")
-                    st.markdown(paper['abstract'])
-            
+
+                # Check if summary exists
+                has_summary = paper.get('has_summary', False)
+
+                if has_summary:
+                    # Fetch and display summary
+                    summary = orchestrator.db.get_paper_summary(paper['arxiv_id'])
+                    if summary:
+                        st.markdown("### Structured Summary")
+
+                        # Create tabs for summary sections
+                        tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Methodology", "Results", "Related Work"])
+
+                        with tab1:
+                            abstract = summary.get('abstract_summary', '').strip() if summary.get('abstract_summary') else ''
+                            if abstract:
+                                st.markdown("**Abstract:**")
+                                st.markdown(abstract)
+                            else:
+                                st.info("No abstract available")
+
+                            if summary.get('date'):
+                                st.markdown(f"**Date:** {summary.get('date')}")
+                            if summary.get('authors'):
+                                st.markdown(f"**Authors:** {summary.get('authors')}")
+
+                        with tab2:
+                            methodology = summary.get('methodology', '').strip() if summary.get('methodology') else ''
+                            if methodology:
+                                st.markdown(methodology)
+                            else:
+                                st.info("No methodology information available")
+
+                        with tab3:
+                            results = summary.get('results', '').strip() if summary.get('results') else ''
+                            if results:
+                                st.markdown(results)
+                            else:
+                                st.info("No results information available")
+
+                        with tab4:
+                            related_work = summary.get('related_work', '').strip() if summary.get('related_work') else ''
+                            if related_work:
+                                st.markdown(related_work)
+                            else:
+                                st.info("No related work information available")
+
+                        if summary.get('structure_score'):
+                            st.caption(f"Summary Quality: {summary['structure_score']:.0f}%")
+
+                        # Fallback: if all structured fields are empty, show raw summary
+                        all_empty = not any([
+                            summary.get('abstract_summary', '').strip(),
+                            summary.get('methodology', '').strip(),
+                            summary.get('results', '').strip(),
+                            summary.get('related_work', '').strip()
+                        ])
+
+                        if all_empty and summary.get('raw_summary'):
+                            st.warning("Structured sections unavailable - showing raw summary:")
+                            st.text_area("Raw Summary", summary['raw_summary'], height=300, disabled=True)
+                else:
+                    # Show abstract if no summary
+                    if paper.get('abstract'):
+                        st.markdown("**Abstract:**")
+                        st.markdown(paper['abstract'])
+
             with col2:
                 st.markdown("**Status:**")
                 if paper['pdf_downloaded']:
@@ -524,8 +713,38 @@ elif page == "📚 Browse Papers":
                     st.markdown("✅ Parsed")
                 if paper['has_embeddings']:
                     st.markdown("✅ Embeddings")
-                
+                if has_summary:
+                    st.markdown("✅ Summary")
+
                 st.markdown(f"[📄 View on ArXiv](https://arxiv.org/abs/{paper['arxiv_id']})")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Add summary generation button if not yet summarized
+                if not has_summary and paper['processed']:
+                    if st.button(f"Generate Summary", key=f"gen_{paper['arxiv_id']}"):
+                        with st.spinner("Generating summary..."):
+                            if orchestrator.summarizer_enabled and orchestrator.summarizer:
+                                success = orchestrator.summarizer.generate_summary(paper['arxiv_id'])
+                                if success:
+                                    st.success("Summary generated!")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to generate summary")
+                            else:
+                                st.error("Summarizer not available")
+                elif has_summary:
+                    if st.button(f"Regenerate", key=f"regen_{paper['arxiv_id']}"):
+                        with st.spinner("Regenerating summary..."):
+                            if orchestrator.summarizer_enabled and orchestrator.summarizer:
+                                success = orchestrator.summarizer.regenerate_summary(paper['arxiv_id'], force=True)
+                                if success:
+                                    st.success("Summary regenerated!")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to regenerate summary")
+                            else:
+                                st.error("Summarizer not available")
 
 # Footer
 st.markdown("<br><br>", unsafe_allow_html=True)

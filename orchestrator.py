@@ -17,6 +17,7 @@ try:
     from arxiv_bot import ArxivBot
     from pdf_parser import PDFParser
     from vector_store import VectorStore
+    from paper_summarizer import PaperSummarizer
 except ImportError as e:
     print(f"Error importing components: {e}")
     print("Make sure all component files are in the same directory.")
@@ -44,7 +45,17 @@ class PipelineOrchestrator:
         self.arxiv_bot = ArxivBot()
         self.pdf_parser = PDFParser()
         self.vector_store = VectorStore()
-        
+
+        # Initialize summarizer (optional - only if enabled)
+        try:
+            self.summarizer = PaperSummarizer()
+            self.summarizer_enabled = True
+            logger.info("Paper Summarizer initialized successfully")
+        except Exception as e:
+            logger.warning(f"Paper Summarizer not available: {e}")
+            self.summarizer = None
+            self.summarizer_enabled = False
+
         logger.info("Orchestrator ready!")
     
     def run_complete_pipeline(self) -> Dict:
@@ -81,7 +92,20 @@ class PipelineOrchestrator:
             results['steps']['embeddings'] = embedding_results
             logger.info(f"✓ Created embeddings for {embedding_results['success']} papers")
             logger.info(f"  Estimated OpenAI API cost: ${embedding_results['estimated_cost']:.4f}")
-            
+
+            # Step 4: Generate summaries (if enabled)
+            if self.summarizer_enabled and self.summarizer:
+                logger.info("Step 4: Generating structured summaries...")
+                summary_results = self.summarizer.generate_summaries_batch(
+                    limit=self.config.get('max_papers_per_run', 50)
+                )
+                results['steps']['summaries'] = summary_results
+                logger.info(f"✓ Generated summaries for {summary_results['success']} papers")
+                logger.info(f"  Estimated OpenAI API cost: ${summary_results['estimated_cost']:.4f}")
+            else:
+                logger.info("Step 4: Skipping summary generation (disabled or unavailable)")
+                results['steps']['summaries'] = {'skipped': True}
+
             results['status'] = 'SUCCESS'
             
         except Exception as e:
@@ -133,43 +157,30 @@ class PipelineOrchestrator:
     def get_status(self) -> Dict:
         """Get current pipeline status"""
         stats = self.db.get_stats()
-        
+
         # Get embedding stats
         embedding_stats = self.vector_store.get_embedding_stats()
         stats.update(embedding_stats)
-        
+
+        # Get summary stats (if summarizer available)
+        if self.summarizer_enabled and self.summarizer:
+            summary_stats = self.summarizer.get_summary_stats()
+            stats.update(summary_stats)
+
         # Get last run info
-        self.db.cursor.execute("""
-        SELECT start_time, end_time, status, papers_fetched, papers_processed
-        FROM pipeline_runs
-        ORDER BY id DESC
-        LIMIT 1
-        """)
-        
-        last_run = self.db.cursor.fetchone()
-        
-        if last_run:
-            stats['last_run'] = {
-                'start_time': last_run[0],
-                'end_time': last_run[1],
-                'status': last_run[2],
-                'papers_fetched': last_run[3],
-                'papers_processed': last_run[4]
-            }
-        else:
-            stats['last_run'] = None
+        stats['last_run'] = self.db.get_last_pipeline_run()
         
         return stats
     
     def get_recent_papers(self, limit: int = 20) -> list:
         """Get recently added papers"""
         self.db.cursor.execute("""
-        SELECT arxiv_id, title, abstract, published_date, pdf_downloaded, processed, embedding_created
+        SELECT arxiv_id, title, abstract, published_date, pdf_downloaded, processed, embedding_created, summary_generated
         FROM papers
         ORDER BY fetched_date DESC
         LIMIT ?
         """, (limit,))
-        
+
         papers = []
         for row in self.db.cursor.fetchall():
             papers.append({
@@ -179,7 +190,8 @@ class PipelineOrchestrator:
                 'published_date': row[3],
                 'pdf_downloaded': bool(row[4]),
                 'processed': bool(row[5]),
-                'has_embeddings': bool(row[6])
+                'has_embeddings': bool(row[6]),
+                'has_summary': bool(row[7])
             })
         
         return papers
