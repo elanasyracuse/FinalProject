@@ -25,43 +25,225 @@ from graph_module import create_graph_for_streamlit, get_graph_stats
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    * { font-family: 'Inter', sans-serif; }
-    .main { padding: 2rem; background-color: #f8fafc; }
-    h1, h2, h3 { color: #1e3a8a; font-weight: 600; }
-    
+
+    * {
+        font-family: 'Inter', sans-serif;
+        font-size: 15px;
+    }
+
+    .main {
+        padding: 2rem;
+        background-color: #f8fafc;
+        color: #0f172a;
+    }
+
+    h1, h2, h3 {
+        color: #0f172a;
+        font-weight: 700;
+    }
+    h1 { font-size: 2.2rem !important; }
+    h2 { font-size: 1.75rem !important; }
+    h3 { font-size: 1.4rem !important; }
+
+    /* Paragraphs and text */
+    p, div, span, label {
+        color: #1e293b !important;
+        line-height: 1.6;
+    }
+
+    /* Hero section */
     .hero-container {
-        display: flex; flex-direction: column; align-items: center;
-        justify-content: center; text-align: center; padding: 2rem 1rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 3rem 1.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
     }
-    .hero-title { font-size: 2.5rem; font-weight: 600; color: #1e3a8a; margin-bottom: 0.5rem; }
-    .hero-subtitle { font-size: 1rem; color: #0369a1; max-width: 700px; line-height: 1.6; }
-    
-    .chat-message { padding: 1rem; border-radius: 10px; margin-bottom: 0.5rem; }
-    .user-message { background-color: #dbeafe; }
-    .bot-message { background-color: #f1f5f9; }
-    
-    .stTextInput>div>div>input {
-        background-color: #ffffff; border: 2px solid #cbd5e1;
-        border-radius: 12px; padding: 1rem; font-size: 1rem;
+    .hero-title {
+        font-size: 2.75rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 0.5rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
-    .stTextInput>div>div>input:focus { border-color: #3b82f6; }
-    
+    .hero-subtitle {
+        font-size: 1.15rem;
+        color: #e0e7ff !important;
+        max-width: 700px;
+        line-height: 1.7;
+    }
+
+    /* Chat messages with better contrast */
+    .chat-message {
+        padding: 1.25rem;
+        border-radius: 12px;
+        margin-bottom: 0.75rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    .user-message {
+        background-color: #eff6ff;
+        color: #1e3a8a !important;
+        border-left: 4px solid #3b82f6;
+    }
+    .user-message b {
+        color: #1e40af !important;
+    }
+    .bot-message {
+        background-color: #f1f5f9;
+        color: #0f172a !important;
+        border-left: 4px solid #64748b;
+    }
+    .bot-message b {
+        color: #0f172a !important;
+    }
+
+    /* Text inputs with clear visibility */
+    .stTextInput>div>div>input,
+    .stTextArea>div>div>textarea,
+    .stSelectbox>div>div>select {
+        background-color: #ffffff !important;
+        border: 2px solid #cbd5e1 !important;
+        border-radius: 8px;
+        padding: 0.875rem !important;
+        font-size: 15px !important;
+        color: #0f172a !important;
+    }
+    .stTextInput>div>div>input:focus,
+    .stTextArea>div>div>textarea:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        outline: none;
+    }
+
+    /* Chat input */
+    .stChatInput>div>div>input {
+        background-color: #ffffff !important;
+        border: 2px solid #cbd5e1 !important;
+        color: #0f172a !important;
+        font-size: 15px !important;
+    }
+
+    /* Select boxes */
+    .stSelectbox>div>div>div {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+    }
+
+    /* Result cards */
     .result-card {
-        background-color: #ffffff; border: 1px solid #e2e8f0;
-        border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;
+        background-color: #ffffff;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+        transition: all 0.2s ease;
     }
-    .result-card:hover { border-color: #3b82f6; transform: translateY(-2px); }
-    
-    [data-testid="stSidebar"] { background-color: #1e3a8a; }
-    [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
-    
+    .result-card:hover {
+        border-color: #3b82f6;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(59, 130, 246, 0.15);
+    }
+
+    /* Sidebar with better contrast */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%);
+    }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] div {
+        color: #ffffff !important;
+    }
+
+    /* Sidebar inputs */
+    [data-testid="stSidebar"] .stTextInput>div>div>input,
+    [data-testid="stSidebar"] .stSelectbox>div>div>select {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        border: 2px solid #94a3b8 !important;
+    }
+
+    /* Buttons with clear contrast */
     .stButton>button {
-        background-color: #3b82f6; color: white; border: none;
-        border-radius: 8px; padding: 0.75rem 1.5rem; font-weight: 500;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 8px;
+        padding: 0.875rem 1.75rem;
+        font-weight: 600;
+        font-size: 15px !important;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
     }
-    .stButton>button:hover { background-color: #2563eb; }
-    
+    .stButton>button:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        transform: translateY(-1px);
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+    }
+
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        color: #0f172a !important;
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #475569 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+    }
+
+    /* Success/Error/Info messages */
+    .stSuccess, .stError, .stWarning, .stInfo {
+        color: #0f172a !important;
+        border-radius: 8px !important;
+    }
+
+    /* Links */
+    a {
+        color: #2563eb !important;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    a:hover {
+        color: #1d4ed8 !important;
+        text-decoration: underline;
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #f1f5f9;
+        color: #475569;
+        border-radius: 8px 8px 0 0;
+        padding: 0.75rem 1.5rem;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #3b82f6 !important;
+        color: #ffffff !important;
+    }
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>

@@ -11,6 +11,176 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Add consistent styling
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* Base styles with improved readability */
+    * {
+        font-family: 'Inter', sans-serif;
+        font-size: 15px;
+    }
+
+    .main {
+        padding: 2rem;
+        background-color: #ffffff;
+        color: #1f2937;
+    }
+
+    /* Headings with better contrast */
+    h1, h2, h3 {
+        color: #1e3a8a;
+        font-weight: 600;
+    }
+    h1 { font-size: 2.2rem !important; }
+    h2 { font-size: 1.75rem !important; }
+    h3 { font-size: 1.4rem !important; }
+
+    /* Paragraphs and text */
+    p, div, span, label {
+        color: #374151 !important;
+        line-height: 1.6;
+    }
+
+    /* Text inputs with clear visibility */
+    .stTextInput>div>div>input,
+    .stTextArea>div>div>textarea {
+        background-color: #ffffff !important;
+        border: 2px solid #d1d5db !important;
+        border-radius: 8px;
+        padding: 0.875rem !important;
+        font-size: 15px !important;
+        color: #1f2937 !important;
+    }
+    .stTextInput>div>div>input:focus,
+    .stTextArea>div>div>textarea:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Chat input */
+    .stChatInput>div>div>input {
+        background-color: #ffffff !important;
+        border: 2px solid #d1d5db !important;
+        color: #1f2937 !important;
+        font-size: 15px !important;
+        padding: 0.875rem !important;
+    }
+
+    /* Chat messages */
+    [data-testid="stChatMessage"] {
+        background-color: #f9fafb !important;
+        border: 1px solid #e5e7eb;
+        padding: 1rem;
+        border-radius: 8px;
+    }
+    [data-testid="stChatMessage"] p {
+        color: #1f2937 !important;
+    }
+
+    /* Sidebar with better contrast */
+    [data-testid="stSidebar"] {
+        background-color: #1e3a8a;
+    }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] div {
+        color: #ffffff !important;
+    }
+
+    /* Sidebar inputs */
+    [data-testid="stSidebar"] .stTextInput>div>div>input {
+        background-color: #ffffff !important;
+        color: #1f2937 !important;
+        border: 2px solid #cbd5e1 !important;
+    }
+
+    /* Buttons with clear contrast */
+    .stButton>button {
+        background-color: #3b82f6 !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 8px;
+        padding: 0.875rem 1.75rem;
+        font-weight: 500;
+        font-size: 15px !important;
+        transition: all 0.2s;
+    }
+    .stButton>button:hover {
+        background-color: #2563eb !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .stButton>button:disabled {
+        background-color: #9ca3af !important;
+        cursor: not-allowed;
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: #f9fafb !important;
+        color: #1f2937 !important;
+        font-size: 15px !important;
+        border: 1px solid #e5e7eb;
+    }
+    .streamlit-expanderContent {
+        background-color: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-top: none;
+    }
+
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        color: #1f2937 !important;
+        font-size: 1.5rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #6b7280 !important;
+        font-size: 14px !important;
+    }
+
+    /* Success/Error/Info messages */
+    .stSuccess {
+        background-color: #d1fae5 !important;
+        color: #065f46 !important;
+    }
+    .stError {
+        background-color: #fee2e2 !important;
+        color: #991b1b !important;
+    }
+    .stInfo {
+        background-color: #dbeafe !important;
+        color: #1e40af !important;
+    }
+    .stWarning {
+        background-color: #fef3c7 !important;
+        color: #92400e !important;
+    }
+
+    /* Links */
+    a {
+        color: #2563eb !important;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    a:hover {
+        text-decoration: underline;
+    }
+
+    /* Spinner */
+    .stSpinner > div {
+        border-color: #3b82f6 !important;
+    }
+
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
+
 @st.cache_resource
 def init_orchestrator():
     return PipelineOrchestrator()
