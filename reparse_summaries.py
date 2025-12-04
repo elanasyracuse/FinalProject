@@ -1,6 +1,5 @@
-"""
-Reparse existing summaries with the improved parser
-"""
+"""Reparse existing summaries with the improved parser"""
+
 from database_manager import DatabaseManager
 from paper_summarizer import PaperSummarizer
 import re

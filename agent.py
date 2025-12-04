@@ -1,7 +1,4 @@
-"""
-Agent Module - LLM Agent with Tool Calling
-Author: Amaan
-"""
+"""Agent Module - LLM Agent with Tool Calling"""
 
 import json
 import os
@@ -16,8 +13,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
-# Tool definitions for OpenAI function calling
 TOOLS = [
     {
         "type": "function",
@@ -219,23 +214,19 @@ class ResearchAgent:
         self.conv_memory = conversation_memory
         self.lt_memory = long_term_memory
         self.reranker = reranker
-        
-        # Get API key
+
         api_key = self._get_api_key()
         if not api_key:
             raise ValueError("OpenAI API key not found")
-        
+
         self.client = OpenAI(api_key=api_key)
-        self.model = "gpt-4o-mini"  # Good balance of capability and cost
-        
-        # Current user context
+        self.model = "gpt-4o-mini"
+
         self.current_user_id = None
         self.current_user_email = None
-        
-        # Email settings (set externally)
         self.smtp_user = None
         self.smtp_password = None
-        
+
         logger.info("Research Agent initialized")
     
     def _get_api_key(self) -> Optional[str]:
@@ -268,22 +259,14 @@ class ResearchAgent:
         self.smtp_password = smtp_password
     
     def chat(self, user_message: str) -> str:
-        """
-        Main chat interface - processes user message and returns response
-        Uses tool calling to handle various requests
-        """
-        # Add user message to conversation memory
+        """Main chat interface - processes user message and returns response"""
         self.conv_memory.add_message("user", user_message)
-        
-        # Build system prompt with context
+
         system_prompt = self._build_system_prompt()
-        
-        # Get conversation history for API
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(self.conv_memory.get_messages_for_api())
-        
+
         try:
-            # Initial API call with tools
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -293,23 +276,14 @@ class ResearchAgent:
                 max_tokens=1500
             )
             
-            # Process response (may include tool calls)
             assistant_message = response.choices[0].message
-            
-            # Handle tool calls if present
+
             if assistant_message.tool_calls:
-                # Execute tools and get final response
-                final_response = self._handle_tool_calls(
-                    messages, 
-                    assistant_message
-                )
+                final_response = self._handle_tool_calls(messages, assistant_message)
             else:
-                # Direct response without tools
                 final_response = assistant_message.content
-            
-            # Add response to conversation memory
+
             self.conv_memory.add_message("assistant", final_response)
-            
             return final_response
             
         except Exception as e:
@@ -354,8 +328,6 @@ class ResearchAgent:
     
     def _handle_tool_calls(self, messages: List[Dict], assistant_message) -> str:
         """Handle tool calls and return final response"""
-        
-        # Add assistant message with tool calls to messages
         messages.append({
             "role": "assistant",
             "content": assistant_message.content,
@@ -371,37 +343,30 @@ class ResearchAgent:
                 for tc in assistant_message.tool_calls
             ]
         })
-        
-        # Execute each tool call
+
         for tool_call in assistant_message.tool_calls:
             function_name = tool_call.function.name
             function_args = json.loads(tool_call.function.arguments)
-            
             logger.info(f"Executing tool: {function_name} with args: {function_args}")
-            
-            # Execute the tool
+
             result = self._execute_tool(function_name, function_args)
-            
-            # Add tool result to messages
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
                 "content": json.dumps(result) if isinstance(result, dict) else str(result)
             })
-        
-        # Get final response from LLM
+
         final_response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=0.7,
             max_tokens=1500
         )
-        
+
         return final_response.choices[0].message.content
     
     def _execute_tool(self, function_name: str, args: Dict) -> Dict:
         """Execute a tool and return result"""
-        
         tool_handlers = {
             "search_papers": self._tool_search_papers,
             "get_paper_details": self._tool_get_paper_details,
@@ -414,9 +379,9 @@ class ResearchAgent:
             "compare_papers": self._tool_compare_papers,
             "send_papers_email": self._tool_send_email
         }
-        
+
         handler = tool_handlers.get(function_name)
-        
+
         if handler:
             try:
                 return handler(**args)
@@ -425,9 +390,7 @@ class ResearchAgent:
                 return {"error": str(e)}
         else:
             return {"error": f"Unknown tool: {function_name}"}
-    
-    # ===== Tool Implementations =====
-    
+
     def _tool_search_papers(self, query: str, num_results: int = 5) -> Dict:
         """Search for papers"""
         # Get more candidates for reranking

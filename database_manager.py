@@ -1,7 +1,4 @@
-"""
-Database Manager - Core SQLite implementation with user memory tables
-Author: Amaan
-"""
+"""Database Manager - Core SQLite implementation with user memory tables"""
 
 import sqlite3
 import json
@@ -15,28 +12,25 @@ logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     """Core database manager for all RAG bot data"""
-    
+
     def __init__(self, db_path="./data/ragbot.db"):
         self.db_path = db_path
-        
-        # Create the directory if it doesn't exist
+
         db_dir = os.path.dirname(db_path)
         if db_dir:
             os.makedirs(db_dir, exist_ok=True)
             if not os.path.exists(db_path):
                 logger.info(f"Created database directory: {db_dir}")
-        
+
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
         self._create_tables()
-        self._create_user_tables()  # NEW: Create user-related tables
+        self._create_user_tables()
         logger.info(f"Database initialized at {db_path}")
     
     def _create_tables(self):
         """Create all necessary tables"""
-        
-        # Main papers table
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS papers (
             arxiv_id TEXT PRIMARY KEY,
@@ -56,7 +50,6 @@ class DatabaseManager:
         )
         """)
         
-        # Embeddings table
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS embeddings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +63,6 @@ class DatabaseManager:
         )
         """)
         
-        # Pipeline runs tracking
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS pipeline_runs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,7 +75,6 @@ class DatabaseManager:
         )
         """)
 
-        # Paper summaries table (for fine-tuned model output)
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS paper_summaries (
             paper_id TEXT PRIMARY KEY,
@@ -101,16 +92,12 @@ class DatabaseManager:
         )
         """)
 
-        # Create indices for performance
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_papers_processed ON papers(processed)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_embeddings_paper ON embeddings(paper_id)")
-
         self.conn.commit()
     
     def _create_user_tables(self):
         """Create user-related tables for long-term memory"""
-        
-        # User profiles table
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_profiles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,7 +111,6 @@ class DatabaseManager:
         )
         """)
         
-        # Search history table
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS search_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,7 +122,6 @@ class DatabaseManager:
         )
         """)
         
-        # User-paper interactions table
         self.cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_papers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,11 +137,9 @@ class DatabaseManager:
         )
         """)
         
-        # Create indices for user tables
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_email ON user_profiles(email)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_search_user ON search_history(user_id)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_papers ON user_papers(user_id)")
-        
         self.conn.commit()
         logger.info("User tables initialized")
     
@@ -353,19 +336,16 @@ class DatabaseManager:
         self.cursor.execute("SELECT COUNT(*) FROM embeddings")
         stats['total_chunks'] = self.cursor.fetchone()[0]
         
-        # NEW: Add user stats
         self.cursor.execute("SELECT COUNT(*) FROM user_profiles")
         stats['total_users'] = self.cursor.fetchone()[0]
-        
+
         self.cursor.execute("SELECT COUNT(*) FROM search_history")
         stats['total_searches'] = self.cursor.fetchone()[0]
-        
+
         self.cursor.execute("SELECT COUNT(*) FROM user_papers WHERE is_saved = 1")
         stats['total_saved_papers'] = self.cursor.fetchone()[0]
 
         return stats
-
-    # ========== Paper Summary Methods ==========
 
     def store_paper_summary(self, paper_id: str, title: str, authors: str, date: str,
                            abstract_summary: str, methodology: str, results: str,

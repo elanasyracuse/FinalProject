@@ -1,8 +1,4 @@
-"""
-Graph Module - Knowledge Graph Generation for Research Papers
-Integrates with RAG Research Bot
-Author: Amaan
-"""
+"""Graph Module - Knowledge Graph Generation for Research Papers"""
 
 import asyncio
 import json
@@ -38,10 +34,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-#################################################
-# CONFIGURATION
-#################################################
-
 def get_config():
     """Get configuration from environment or defaults"""
     return {
@@ -50,10 +42,6 @@ def get_config():
         "NEO4J_PASSWORD": os.environ.get("NEO4J_PASSWORD", ""),
         "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", "")
     }
-
-#################################################
-# CONCEPT EXTRACTOR
-#################################################
 
 async def extract_concepts_llm(text: str, client: AsyncOpenAI) -> List[str]:
     """Extract key technical concepts using LLM"""
@@ -90,10 +78,6 @@ Return format: ["concept1", "concept2", ...]
     except Exception as e:
         logger.error(f"Error extracting concepts: {e}")
         return []
-
-#################################################
-# SIMPLE GRAPH (NO NEO4J REQUIRED)
-#################################################
 
 def create_simple_graph_html(papers: List[Dict], show_shared: bool = True) -> str:
     """
@@ -207,8 +191,7 @@ def create_simple_graph_html(papers: List[Dict], show_shared: bool = True) -> st
 
 
 def extract_simple_concepts(text: str) -> List[str]:
-    """Extract simple concepts using keyword matching (no LLM needed)"""
-    # Common ML/AI concepts to look for
+    """Extract simple concepts using keyword matching"""
     concept_keywords = [
         "retrieval augmented generation", "RAG", "large language model", "LLM",
         "transformer", "attention", "BERT", "GPT", "embedding", "vector",
@@ -240,11 +223,7 @@ def extract_simple_concepts(text: str) -> List[str]:
             if clean_word.isalpha() and len(clean_word) > 3:
                 found_concepts.append(clean_word)
     
-    return list(set(found_concepts))[:20]  # Limit to 20 concepts
-
-#################################################
-# ADVANCED GRAPH WITH NEO4J (OPTIONAL)
-#################################################
+    return list(set(found_concepts))[:20]
 
 class KnowledgeGraphBuilder:
     """Builds knowledge graphs from research papers using Neo4j and Graphiti"""
@@ -428,10 +407,6 @@ class KnowledgeGraphBuilder:
         except Exception as e:
             logger.error(f"Error creating visualization: {e}")
             return ""
-
-#################################################
-# STREAMLIT HELPER FUNCTIONS
-#################################################
 
 def create_graph_for_streamlit(papers: List[Dict], graph_type: str = "simple") -> str:
     """

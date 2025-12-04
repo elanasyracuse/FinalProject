@@ -1,7 +1,4 @@
-"""
-Paper Summarizer - Generates structured summaries using fine-tuned model
-Author: Nikita
-"""
+"""Paper Summarizer - Generates structured summaries using fine-tuned model"""
 
 import json
 import os
@@ -19,11 +16,9 @@ class PaperSummarizer:
     def __init__(self):
         self.db = DatabaseManager()
 
-        # Load configuration
         with open('config.json', 'r') as f:
             self.config = json.load(f)
 
-        # Get API key
         api_key = self._get_api_key()
 
         if not api_key:
@@ -32,10 +27,7 @@ class PaperSummarizer:
                 "or add it to .streamlit/secrets.toml"
             )
 
-        # Initialize OpenAI client
         self.client = OpenAI(api_key=api_key)
-
-        # Get fine-tuned model ID from config
         self.fine_tuned_model = self.config.get('fine_tuned_model')
         self.fallback_model = self.config.get('fallback_model', 'gpt-4o-mini')
         self.enabled = self.config.get('summarization_enabled', True)

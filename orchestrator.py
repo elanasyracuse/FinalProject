@@ -1,7 +1,4 @@
-"""
-Pipeline Orchestrator - Coordinates all components
-Author: Amaan
-"""
+"""Pipeline Orchestrator - Coordinates all components"""
 
 import json
 import os
@@ -11,7 +8,6 @@ import schedule
 import time
 from typing import Dict
 
-# Import components with error handling
 try:
     from database_manager import DatabaseManager
     from arxiv_bot import ArxivBot
@@ -35,18 +31,15 @@ class PipelineOrchestrator:
     
     def __init__(self):
         logger.info("Initializing Pipeline Orchestrator...")
-        
-        # Load configuration
+
         with open('config.json', 'r') as f:
             self.config = json.load(f)
-        
-        # Initialize components
+
         self.db = DatabaseManager()
         self.arxiv_bot = ArxivBot()
         self.pdf_parser = PDFParser()
         self.vector_store = VectorStore()
 
-        # Initialize summarizer (optional - only if enabled)
         try:
             self.summarizer = PaperSummarizer()
             self.summarizer_enabled = True
@@ -57,21 +50,20 @@ class PipelineOrchestrator:
             self.summarizer_enabled = False
 
         logger.info("Orchestrator ready!")
-    
+
     def run_complete_pipeline(self) -> Dict:
         """Run the entire pipeline end-to-end"""
         logger.info("="*60)
         logger.info("STARTING COMPLETE PIPELINE")
         logger.info("="*60)
-        
+
         start_time = datetime.now()
         results = {
             'start_time': start_time.isoformat(),
             'steps': {}
         }
-        
+
         try:
-            # Step 1: Fetch new papers
             logger.info("Step 1: Fetching papers from arXiv...")
             fetch_results = self.arxiv_bot.fetch_recent_papers(
                 days_back=self.config.get('days_back', 7),
@@ -79,21 +71,18 @@ class PipelineOrchestrator:
             )
             results['steps']['fetch'] = fetch_results
             logger.info(f"✓ Fetched {fetch_results['papers_stored']} papers")
-            
-            # Step 2: Parse PDFs
+
             logger.info("Step 2: Parsing PDF documents...")
             parse_results = self.pdf_parser.parse_all_unprocessed()
             results['steps']['parse'] = parse_results
             logger.info(f"✓ Parsed {parse_results['success']} papers")
-            
-            # Step 3: Create embeddings
+
             logger.info("Step 3: Creating embeddings...")
             embedding_results = self.vector_store.process_all_papers()
             results['steps']['embeddings'] = embedding_results
             logger.info(f"✓ Created embeddings for {embedding_results['success']} papers")
             logger.info(f"  Estimated OpenAI API cost: ${embedding_results['estimated_cost']:.4f}")
 
-            # Step 4: Generate summaries (if enabled)
             if self.summarizer_enabled and self.summarizer:
                 logger.info("Step 4: Generating structured summaries...")
                 summary_results = self.summarizer.generate_summaries_batch(
@@ -107,18 +96,15 @@ class PipelineOrchestrator:
                 results['steps']['summaries'] = {'skipped': True}
 
             results['status'] = 'SUCCESS'
-            
+
         except Exception as e:
             logger.error(f"Pipeline failed: {e}")
             results['status'] = 'FAILED'
             results['error'] = str(e)
-        
+
         results['end_time'] = datetime.now().isoformat()
-        
-        # Save pipeline results
         self._save_results(results)
-        
-        # Log to database
+
         end_time = datetime.now()
         papers_fetched = results['steps'].get('fetch', {}).get('papers_found', 0)
         papers_processed = results['steps'].get('embeddings', {}).get('success', 0)
@@ -126,11 +112,11 @@ class PipelineOrchestrator:
             start_time, end_time, papers_fetched, papers_processed,
             results['status'], results.get('error')
         )
-        
+
         logger.info("="*60)
         logger.info(f"PIPELINE COMPLETE - Status: {results['status']}")
         logger.info("="*60)
-        
+
         return results
     
     def search_papers(self, query: str, n_results: int = 5) -> Dict:

@@ -1,7 +1,4 @@
-"""
-RAG Research Bot - Streamlit UI with Agent, Memory, Reranking & Knowledge Graph
-Author: Amaan
-"""
+"""RAG Research Bot - Streamlit UI with Agent, Memory, Reranking & Knowledge Graph"""
 
 import streamlit as st
 import pandas as pd
@@ -10,7 +7,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit.components.v1 as components
 
-# Page configuration - MUST BE FIRST
 st.set_page_config(
     page_title="RAG Research Bot",
     page_icon="🤖",
@@ -18,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Now import other modules (after set_page_config)
 from database_manager import DatabaseManager
 from vector_store import VectorStore
 from memory import ConversationMemory, LongTermMemory
@@ -27,7 +22,6 @@ from agent import ResearchAgent
 from email_utils import send_papers_email
 from graph_module import create_graph_for_streamlit, get_graph_stats
 
-# Custom CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -74,8 +68,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ============ Initialize Components ============
-
 @st.cache_resource
 def init_components():
     """Initialize all components once"""
@@ -108,15 +100,10 @@ if 'user_email' not in st.session_state:
 if 'user_logged_in' not in st.session_state:
     st.session_state.user_logged_in = False
 
-
-# ============ Sidebar ============
-
 with st.sidebar:
     st.markdown("<h2 style='text-align: center;'>🤖 RAG Bot</h2>", unsafe_allow_html=True)
-    
-    # User login section
     st.markdown("### 👤 User Profile")
-    
+
     user_email = st.text_input(
         "Your Email",
         value=st.session_state.user_email or "",
@@ -131,27 +118,23 @@ with st.sidebar:
     
     if st.session_state.user_logged_in:
         st.markdown(f"✅ Logged in as: {st.session_state.user_email}")
-        
-        # Show saved papers count
         saved = st.session_state.lt_memory.get_saved_papers(
             st.session_state.agent.current_user_id
         )
         st.markdown(f"📚 Saved papers: {len(saved)}")
-    
+
     st.markdown("<hr>", unsafe_allow_html=True)
-    
-    # Navigation
+
     page = st.selectbox(
         "Navigation",
         ["💬 Chat", "🔍 Search", "🕸️ Knowledge Graph", "📊 Dashboard", "⚙️ Pipeline", "📚 Browse Papers", "📚 My Papers"]
     )
     
     st.markdown("<hr>", unsafe_allow_html=True)
-    
-    # Quick Stats
+
     st.markdown("### 📈 Stats")
     stats = db.get_stats()
-    
+
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Papers", stats['total_papers'])
@@ -159,8 +142,7 @@ with st.sidebar:
     with col2:
         st.metric("Users", stats['total_users'])
         st.metric("Searches", stats['total_searches'])
-    
-    # Email settings (collapsed)
+
     with st.expander("📧 Email Settings"):
         smtp_user = st.text_input("SMTP Email", placeholder="your@gmail.com")
         smtp_pass = st.text_input("App Password", type="password")
@@ -168,9 +150,6 @@ with st.sidebar:
         if smtp_user and smtp_pass:
             st.session_state.agent.set_email_credentials(smtp_user, smtp_pass)
             st.success("Email configured!")
-
-
-# ============ Main Content ============
 
 if page == "💬 Chat":
     st.markdown("""
@@ -180,64 +159,51 @@ if page == "💬 Chat":
             Try: "Find papers on RAG" or "Summarize the first paper"</p>
         </div>
     """, unsafe_allow_html=True)
-    
-    # Chat interface
+
     st.markdown("### 💬 Conversation")
-    
-    # Display conversation history
+
     for msg in st.session_state.conv_memory.messages:
         if msg['role'] == 'user':
             st.markdown(f"<div class='chat-message user-message'><b>You:</b> {msg['content']}</div>", 
                        unsafe_allow_html=True)
         else:
-            st.markdown(f"<div class='chat-message bot-message'><b>Assistant:</b> {msg['content']}</div>", 
+            st.markdown(f"<div class='chat-message bot-message'><b>Assistant:</b> {msg['content']}</div>",
                        unsafe_allow_html=True)
-    
-    # Chat input
+
     user_input = st.chat_input("Ask about papers... (e.g., 'Find papers on hallucination in LLMs')")
-    
+
     if user_input:
-        # Display user message
-        st.markdown(f"<div class='chat-message user-message'><b>You:</b> {user_input}</div>", 
+        st.markdown(f"<div class='chat-message user-message'><b>You:</b> {user_input}</div>",
                    unsafe_allow_html=True)
-        
-        # Get agent response
+
         with st.spinner("Thinking..."):
             response = st.session_state.agent.chat(user_input)
-        
-        # Display response
-        st.markdown(f"<div class='chat-message bot-message'><b>Assistant:</b> {response}</div>", 
+
+        st.markdown(f"<div class='chat-message bot-message'><b>Assistant:</b> {response}</div>",
                    unsafe_allow_html=True)
-        
-        # Rerun to update history display
         st.rerun()
-    
-    # Display current search results if any
+
     if st.session_state.conv_memory.current_search_results:
         st.markdown("---")
         st.markdown("### 📄 Current Search Results")
-        
+
         for i, paper in enumerate(st.session_state.conv_memory.current_search_results, 1):
             with st.expander(f"#{i} - {paper.get('title', 'Untitled')[:80]}..."):
                 col1, col2 = st.columns([3, 1])
-                
+
                 with col1:
                     st.markdown(f"**ArXiv ID:** {paper.get('arxiv_id')}")
-                    
-                    # Show both similarity and rerank score if available
                     sim = paper.get('similarity', 0)
                     rerank = paper.get('rerank_score', sim)
                     st.markdown(f"**Embedding Similarity:** {sim:.2%}")
                     if rerank != sim:
                         st.markdown(f"**Rerank Score:** {rerank:.2%}")
-                    
                     st.markdown("**Abstract:**")
                     st.markdown(paper.get('abstract', 'No abstract')[:500] + "...")
-                
+
                 with col2:
                     st.markdown(f"[📄 ArXiv](https://arxiv.org/abs/{paper.get('arxiv_id')})")
-                    
-                    # Quick action buttons
+
                     if st.session_state.user_logged_in:
                         if st.button(f"💾 Save", key=f"save_{i}"):
                             st.session_state.lt_memory.save_paper(
@@ -245,8 +211,7 @@ if page == "💬 Chat":
                                 paper.get('arxiv_id')
                             )
                             st.success("Saved!")
-    
-    # Clear conversation button
+
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
         if st.session_state.conv_memory.current_search_results:
@@ -258,7 +223,6 @@ if page == "💬 Chat":
             st.session_state.conv_memory.clear()
             st.rerun()
 
-
 elif page == "🔍 Search":
     st.markdown("""
         <div class='hero-container'>
@@ -266,8 +230,7 @@ elif page == "🔍 Search":
             <p class='hero-subtitle'>Semantic search with RAG and LLM reranking</p>
         </div>
     """, unsafe_allow_html=True)
-    
-    # Search interface
+
     col1, col2, col3 = st.columns([1, 3, 1])
     with col2:
         query = st.text_input(
@@ -286,35 +249,31 @@ elif page == "🔍 Search":
     
     if query and search_btn:
         with st.spinner("Searching and reranking..."):
-            # Get user interests for personalized reranking
             user_interests = []
             if st.session_state.user_logged_in:
                 user_interests = st.session_state.lt_memory.get_user_interests(
                     st.session_state.agent.current_user_id
                 )
-            
-            # Search with reranking
+
             results = vector_store.semantic_search(
-                query, 
+                query,
                 n_results=n_results,
                 use_reranker=use_reranker,
                 user_interests=user_interests
             )
-            
-            # Save to conversation memory
+
             st.session_state.conv_memory.set_search_results(results, query)
-            
-            # Log search to long-term memory
+
             if st.session_state.user_logged_in:
                 st.session_state.lt_memory.add_search(
                     st.session_state.agent.current_user_id,
                     query,
                     len(results)
                 )
-        
+
         if results:
             st.success(f"Found {len(results)} papers" + (" (reranked)" if use_reranker else ""))
-            
+
             for i, paper in enumerate(results, 1):
                 with st.expander(f"#{i} - {paper['title']}", expanded=(i == 1)):
                     col1, col2 = st.columns([3, 1])
@@ -345,19 +304,16 @@ elif page == "🔍 Search":
         else:
             st.warning("No papers found.")
 
-
 elif page == "🕸️ Knowledge Graph":
     st.markdown("<h1 style='text-align: center;'>🕸️ Knowledge Graph</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #64748b;'>Visualize relationships between papers and concepts</p>", unsafe_allow_html=True)
-    
-    # Check if we have search results
+
     if not st.session_state.conv_memory.current_search_results:
         st.info("👆 First, search for papers in the **Chat** or **Search** page to generate a knowledge graph.")
-        
-        # Option to search directly
+
         st.markdown("### Quick Search")
         quick_query = st.text_input("Enter a topic to search:", placeholder="e.g., retrieval augmented generation")
-        
+
         if st.button("🔍 Search & Generate Graph", type="primary"):
             if quick_query:
                 with st.spinner("Searching papers..."):
@@ -367,10 +323,9 @@ elif page == "🕸️ Knowledge Graph":
     else:
         papers = st.session_state.conv_memory.current_search_results
         topic = st.session_state.conv_memory.current_topic
-        
+
         st.success(f"📊 Showing graph for **{len(papers)} papers** on topic: **{topic}**")
-        
-        # Graph options
+
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
             st.markdown(f"**Papers in graph:** {len(papers)}")
@@ -379,10 +334,9 @@ elif page == "🕸️ Knowledge Graph":
         with col3:
             if st.button("🔄 Refresh Graph"):
                 st.rerun()
-        
-        # Display graph statistics
+
         stats = get_graph_stats(papers)
-        
+
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Papers", stats["total_papers"])
@@ -392,43 +346,39 @@ elif page == "🕸️ Knowledge Graph":
             st.metric("Shared", stats["shared_concepts"])
         with col4:
             st.metric("Unique", stats["unique_concepts"])
-        
-        # Generate and display the graph
+
         st.markdown("### 📈 Interactive Knowledge Graph")
         st.markdown("*🔵 Blue = Papers | 🟠 Orange = Shared Concepts | 🟢 Green = Unique Concepts*")
-        
+
         with st.spinner("Generating knowledge graph..."):
             graph_html = create_graph_for_streamlit(papers, graph_type="simple")
-        
-        # Display the graph in an iframe
+
         components.html(graph_html, height=650, scrolling=True)
-        
-        # Show shared concepts
+
         if stats["shared_list"]:
             st.markdown("### 🔗 Shared Concepts Across Papers")
-            
+
             shared_concepts = stats["shared_list"]
             concept_details = stats["concept_details"]
-            
+
             for concept in shared_concepts:
                 papers_with_concept = concept_details.get(concept, [])
                 with st.expander(f"**{concept}** (in {len(papers_with_concept)} papers)"):
                     for p in papers_with_concept:
                         st.markdown(f"- {p[:80]}...")
-        
-        # Show papers with their concepts
+
         st.markdown("### 📄 Papers & Their Concepts")
-        
+
         for i, paper in enumerate(papers, 1):
             title = paper.get('title', f'Paper {i}')
             abstract = paper.get('abstract', '')
             from graph_module import extract_simple_concepts
             concepts = extract_simple_concepts(title + " " + abstract)
-            
+
             with st.expander(f"#{i} - {title[:60]}..."):
                 st.markdown(f"**ArXiv ID:** {paper.get('arxiv_id', 'N/A')}")
                 st.markdown(f"**Concepts ({len(concepts)}):** {', '.join(concepts[:15])}")
-                
+
                 if st.session_state.user_logged_in:
                     if st.button(f"💾 Save Paper", key=f"graph_save_{i}"):
                         st.session_state.lt_memory.save_paper(
@@ -436,8 +386,7 @@ elif page == "🕸️ Knowledge Graph":
                             paper.get('arxiv_id')
                         )
                         st.success("Saved!")
-        
-        # Download graph option
+
         st.markdown("---")
         st.download_button(
             label="📥 Download Graph HTML",
@@ -446,12 +395,11 @@ elif page == "🕸️ Knowledge Graph":
             mime="text/html"
         )
 
-
 elif page == "📊 Dashboard":
     st.markdown("<h1 style='text-align: center;'>Pipeline Dashboard</h1>", unsafe_allow_html=True)
-    
+
     stats = db.get_stats()
-    
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Papers", stats['total_papers'])
@@ -461,11 +409,11 @@ elif page == "📊 Dashboard":
         st.metric("Embedded", stats['papers_with_embeddings'])
     with col4:
         st.metric("Total Chunks", stats['total_chunks'])
-    
+
     st.markdown("<br>", unsafe_allow_html=True)
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         pipeline_data = {
             'Stage': ['Fetched', 'Processed', 'Embedded'],
@@ -478,7 +426,7 @@ elif page == "📊 Dashboard":
         fig = px.funnel(pipeline_data, y='Stage', x='Count', title="Pipeline Funnel")
         fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
-    
+
     with col2:
         user_data = {
             'Metric': ['Users', 'Searches', 'Saved Papers'],
@@ -488,21 +436,19 @@ elif page == "📊 Dashboard":
         fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
-
 elif page == "⚙️ Pipeline":
     st.markdown("<h1 style='text-align: center;'>Pipeline Control</h1>", unsafe_allow_html=True)
-    
-    # Import orchestrator here to avoid circular imports
+
     from orchestrator import PipelineOrchestrator
-    
+
     @st.cache_resource
     def get_orchestrator():
         return PipelineOrchestrator()
-    
+
     orchestrator = get_orchestrator()
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("### Run Pipeline")
         days = st.number_input("Days back", 1, 365, 7)

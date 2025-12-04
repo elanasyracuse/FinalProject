@@ -1,7 +1,4 @@
-"""
-Memory Module - Short-term (Conversation) and Long-term (Persistent) Memory
-Author: Amaan
-"""
+"""Memory Module - Short-term (Conversation) and Long-term (Persistent) Memory"""
 
 import json
 from datetime import datetime
@@ -9,7 +6,6 @@ from typing import List, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
-
 
 class ConversationMemory:
     """Short-term memory for maintaining conversation context"""
@@ -104,8 +100,6 @@ class LongTermMemory:
     
     def _ensure_tables(self):
         """Create user-related tables if they don't exist"""
-        
-        # User profiles table
         self.db.cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_profiles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,7 +113,6 @@ class LongTermMemory:
         )
         """)
         
-        # Search history table
         self.db.cursor.execute("""
         CREATE TABLE IF NOT EXISTS search_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -131,7 +124,6 @@ class LongTermMemory:
         )
         """)
         
-        # User-paper interactions table
         self.db.cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_papers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,9 +141,7 @@ class LongTermMemory:
         
         self.db.conn.commit()
         logger.info("Long-term memory tables initialized")
-    
-    # ===== User Profile Methods =====
-    
+
     def get_or_create_user(self, email: str, name: str = None) -> Dict:
         """Get existing user or create new one"""
         self.db.cursor.execute(
@@ -167,14 +157,12 @@ class LongTermMemory:
             )
             self.db.conn.commit()
             return dict(row)
-        
-        # Create new user
+
         self.db.cursor.execute(
             "INSERT INTO user_profiles (email, name) VALUES (?, ?)",
             (email, name)
         )
         self.db.conn.commit()
-        
         return self.get_user_by_email(email)
     
     def get_user_by_email(self, email: str) -> Optional[Dict]:
@@ -203,9 +191,7 @@ class LongTermMemory:
         if row and row[0]:
             return json.loads(row[0])
         return []
-    
-    # ===== Search History Methods =====
-    
+
     def add_search(self, user_id: int, query: str, results_count: int):
         """Record a search in history"""
         self.db.cursor.execute(
@@ -241,9 +227,7 @@ class LongTermMemory:
         """, (user_id, limit))
         
         return [row[0] for row in self.db.cursor.fetchall()]
-    
-    # ===== Paper Interaction Methods =====
-    
+
     def save_paper(self, user_id: int, arxiv_id: str) -> bool:
         """Save/bookmark a paper for user"""
         try:
@@ -361,9 +345,7 @@ class LongTermMemory:
         
         row = self.db.cursor.fetchone()
         return bool(row and row[0])
-    
-    # ===== Context Methods for Agent =====
-    
+
     def get_user_context(self, user_id: int) -> str:
         """Get formatted user context for LLM"""
         context_parts = []

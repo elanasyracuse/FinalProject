@@ -1,7 +1,4 @@
-"""
-Vector Store - Embeddings management with OpenAI, SQLite backend, and Reranking
-Author: Amaan
-"""
+"""Vector Store - Embeddings management with OpenAI, SQLite backend, and Reranking"""
 
 import numpy as np
 import os
@@ -25,31 +22,29 @@ class VectorStore:
     def __init__(self, reranker=None):
         self.db = DatabaseManager()
         self.parser = PDFParser()
-        self.reranker = reranker  # NEW: Optional reranker
-        
-        # Load configuration
+        self.reranker = reranker
+
         with open('config.json', 'r') as f:
             self.config = json.load(f)
-        
-        # Get API key
+
         api_key = self._get_api_key()
-        
+
         if not api_key:
             raise ValueError(
                 "OpenAI API key not found! Please either:\n"
                 "1. Create .streamlit/secrets.toml with your key\n"
                 "2. Set environment variable: export OPENAI_API_KEY='your-key'\n"
             )
-        
+
         self.client = OpenAI(api_key=api_key)
         self.embedding_model = self.config.get('embedding_model', 'text-embedding-3-small')
-        
+
         self.embedding_dimensions = {
             'text-embedding-3-small': 1536,
             'text-embedding-3-large': 3072,
             'text-embedding-ada-002': 1536
         }
-        
+
         logger.info(f"Using OpenAI {self.embedding_model} for embeddings")
     
     def _get_api_key(self) -> Optional[str]:

@@ -1,7 +1,4 @@
-"""
-Reranker Module - LLM-based reranking for improved search results
-Author: Amaan
-"""
+"""Reranker Module - LLM-based reranking for improved search results"""
 
 import json
 import os

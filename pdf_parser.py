@@ -1,7 +1,4 @@
-"""
-PDF Parser - Extracts text and sections from papers
-Author: Amaan
-"""
+"""PDF Parser - Extracts text and sections from papers"""
 
 import pypdf
 import re
